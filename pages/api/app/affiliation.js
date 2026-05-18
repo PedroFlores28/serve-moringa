@@ -1,0 +1,321 @@
+import db from "../../../components/db";
+import lib from "../../../components/lib";
+
+const { User, Session, Plan, Product, Affiliation, Activation, Office, Tree, Transaction, Period } =
+  db;
+const { error, success, midd, rand, acum } = lib;
+
+let tree;
+
+const MONTHS_ES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+function buildPeriodKey(year, month) {
+  const mm = String(month).padStart(2, "0");
+  return `${year}-${mm}`;
+}
+
+function buildPeriodLabel(year, month) {
+  const mName = MONTHS_ES[month - 1] || `Mes ${month}`;
+  return `${mName} ${year}`;
+}
+
+/**
+ * Obtiene el periodo abierto actual o crea uno nuevo.
+ * 
+ * IMPORTANTE: Esta función asigna el periodo ABIERTO en el momento de la compra,
+ * no el periodo del mes de la fecha. Esto permite que:
+ * - Un periodo puede iniciarse en cualquier fecha (ej: 2 de enero)
+ * - Ese periodo puede cerrarse en cualquier fecha posterior (ej: 3 de febrero)
+ * - Todas las compras entre el inicio y el cierre pertenecen a ese periodo,
+ *   sin importar que se hayan hecho en un mes diferente
+ * 
+ * Ejemplo:
+ * - Periodo "Enero 2025" iniciado el 2 de enero, cerrado el 3 de febrero
+ * - Todas las compras del 2 de enero al 3 de febrero pertenecen a "Enero 2025"
+ * - Incluso las compras del 1-3 de febrero pertenecen a "Enero 2025" (hasta que se cierre)
+ */
+async function getOrCreateOpenPeriod(now = new Date()) {
+  // Buscar todos los periodos abiertos
+  const openPeriods = await Period.find({ status: "open" });
+  
+  // Si hay periodos abiertos, usar el más reciente (por fecha de creación)
+  // Esto asegura que se use el periodo que está actualmente activo
+  if (openPeriods && openPeriods.length) {
+    openPeriods.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return openPeriods[0];
+  }
+
+  // Si no hay periodos abiertos, crear uno nuevo del mes actual
+  // Esto solo debería pasar si es la primera vez que se usa el sistema
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const key = buildPeriodKey(year, month);
+
+  // Verificar si ya existe un periodo con esa key (puede estar cerrado)
+  const existing = await Period.findOne({ key });
+  if (existing && existing.status !== "closed") return existing;
+
+  // Crear nuevo periodo
+  const period = {
+    id: rand(),
+    key,
+    year,
+    month,
+    label: buildPeriodLabel(year, month),
+    status: "open",
+    createdAt: now,
+    closedAt: null,
+  };
+  await Period.insert(period);
+  return period;
+}
+
+export default async (req, res) => {
+  await midd(req, res);
+
+  // valid session
+  let { session } = req.query;
+  session = await Session.findOne({ value: session });
+  if (!session) return res.json(error("invalid session"));
+
+  // get USER
+  const user = await User.findOne({ id: session.id });
+
+  // get PLANS
+  let plans = await Plan.find({});
+
+  // get PRODUCTS
+  const products = await Product.find({});
+
+  // get last AFFILIATION pending or approved
+  const affiliation = await Affiliation.findOneLast({
+    userId: user.id,
+    status: { $in: ["pending", "approved"] },
+  });
+  const affiliations = await Affiliation.find({
+    userId: user.id,
+    status: "approved",
+  });
+
+  if (affiliation && affiliation.status == "approved") {
+    // if(affiliation.plan.id == 'early') {
+    //  plans.shift()
+    // }
+    if (affiliation.plan.id == "basic") {
+      plans.shift();
+      //  plans.shift()
+    }
+    if (affiliation.plan.id == "standard") {
+      plans.shift();
+      plans.shift();
+      // plans.shift()
+    }
+    if (affiliation.plan.id == "master") {
+      plans = [];
+    }
+  }
+
+  // get transactions
+  const transactions = await Transaction.find({
+    user_id: user.id,
+    virtual: { $in: [null, false] },
+  });
+  const _transactions = await Transaction.find({
+    user_id: user.id,
+    virtual: true,
+  });
+
+  const ins = acum(transactions, { type: "in" }, "value");
+  const outs = acum(transactions, { type: "out" }, "value");
+  const _ins = acum(_transactions, { type: "in" }, "value");
+  const _outs = acum(_transactions, { type: "out" }, "value");
+
+  const balance = ins - outs;
+  const _balance = _ins - _outs;
+
+  if (req.method == "GET") {
+    const offices = await Office.find({ active: { $ne: false } }); // Usuarios solo ven oficinas activas
+    console.log("[Affiliation API] Oficinas cargadas:", offices.map(o => ({ 
+      id: o.id, 
+      name: o.name, 
+      address: o.address,
+      horario: o.horario,
+      dias: o.dias,
+      accounts: o.accounts 
+    })));
+    console.log("[API App Affiliation] Estructura completa del primer producto:", products.length > 0 ? products[0] : "No hay productos");
+    console.log("[API App Affiliation] Campos disponibles en productos:", products.length > 0 ? Object.keys(products[0]) : "No hay productos");
+
+    return res.json(
+      success({
+        name: user.name,
+        lastName: user.lastName,
+        affiliated: user.affiliated,
+        _activated: user._activated,
+        activated: user.activated,
+        plan: user.plan,
+        country: user.country,
+        photo: user.photo,
+        tree: user.tree,
+        dni: user.dni,
+        token: user.token,
+
+        plans,
+        products,
+        affiliation,
+        affiliations,
+        offices,
+
+        balance,
+        _balance,
+      })
+    );
+  }
+
+  if (req.method == "POST") {
+    let {
+      products,
+      plan,
+      voucher,
+      voucher2,
+      office,
+      check,
+      pay_method,
+      bank,
+      bank_info,
+      date,
+      voucher_number,
+      deliveryMethod,
+      deliveryInfo
+    } = req.body;
+    const useCheck = check === true || check === "true";
+
+    // Validación de duplicidad de voucher
+    if (pay_method === "bank" && voucher_number) {
+      const vn = String(voucher_number).trim();
+      const dupAct = await Activation.findOne({
+        voucher_number: vn,
+        status: { $in: ["approved", "pending"] },
+      });
+      const dupAff = await Affiliation.findOne({
+        voucher_number: vn,
+        status: { $in: ["approved", "pending"] },
+        id: { $ne: req.body.id },
+      });
+      if (dupAct || dupAff) {
+        return res.json(
+          error(
+            `El número de operación "${vn}" ya ha sido registrado previamente. Por favor, verifica los datos.`
+          )
+        );
+      }
+    }
+
+    console.log('Affiliation POST - voucher:', voucher ? 'existe' : 'null');
+    console.log('Affiliation POST - voucher2:', voucher2 ? voucher2 : 'null');
+
+    // Validación obligatoria: Oficina de recojo (PDE)
+    const officeId = office != null ? String(office).trim() : ""
+    if (!officeId) return res.json(error("Selecciona una Oficina de Recojo (PDE)."))
+    const officeDoc = await Office.findOne({ id: officeId, active: { $ne: false } })
+    if (!officeDoc) return res.json(error("La Oficina de Recojo (PDE) seleccionada no es válida."))
+
+    // Buscar el plan seleccionado
+    plan = plans.find((e) => e.id == plan.id);
+    console.log({ plan });
+
+    let transactions = [];
+    let amounts;
+
+    // Toda afiliación se cobra completa. Si el usuario marca "usar saldo" (check),
+    // se descuenta primero del saldo no disponible (_balance) y luego del saldo disponible (balance).
+    // El resto queda como "pendiente" y se cubre con voucher/efectivo según pay_method.
+    const price = plan.amount;
+    let a = 0; // saldo no disponible (virtual)
+    let b = 0; // saldo disponible
+    let c = price; // faltante
+
+    if (useCheck) {
+      a = _balance < price ? _balance : price;
+      const r = price - a > 0 ? price - a : 0;
+      b = balance < r ? balance : r;
+      c = price - a - b;
+
+      const id1 = rand();
+      const id2 = rand();
+
+      if (a) {
+        transactions.push(id1);
+        await Transaction.insert({
+          id: id1,
+          date: new Date(),
+          user_id: user.id,
+          type: "out",
+          value: a,
+          name: "affiliation",
+          virtual: true,
+        });
+      }
+
+      if (b) {
+        transactions.push(id2);
+        await Transaction.insert({
+          id: id2,
+          date: new Date(),
+          user_id: user.id,
+          type: "out",
+          value: b,
+          name: "affiliation",
+          virtual: false,
+        });
+      }
+    } else {
+      // No usar saldo: todo el monto queda como faltante a cubrir por el método externo
+      c = price;
+    }
+
+    amounts = [a, b, c];
+    console.log({ a, b, c, price, check });
+
+    const period = await getOrCreateOpenPeriod(new Date());
+    const affiliationId = rand();
+    await Affiliation.insert({
+      id: affiliationId,
+      date: new Date(),
+      userId: user.id,
+      products,
+      plan,
+      voucher,
+      voucher2: voucher2 || null,
+      office,
+      period_key: period.key,
+      period_label: period.label,
+      status: "pending",
+      delivered: false,
+      transactions,
+      amounts,
+      /** Si marcó "usar saldo disponible" en el checkout (true = aplica abono con saldo; puede ser solo saldo o mixto con voucher) */
+      use_balance: useCheck,
+      pay_method,
+      bank,
+      voucher_date: date,
+      voucher_number,
+      type: "affiliation",
+    });
+
+    return res.json(success({ orderNumber: affiliationId, id: affiliationId }));
+  }
+};
