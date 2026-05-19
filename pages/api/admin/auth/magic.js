@@ -31,7 +31,11 @@ export default async (req, res) => {
       type: user.type
     }));
 
-    const redirectUrl = `https://sifrah-admin.vercel.app/login?token=${sessionValue}&account=${account}`;
+    const adminBase =
+      process.env.ADMIN_URL ||
+      process.env.VUE_APP_APP ||
+      "https://admin-moringa.vercel.app";
+    const redirectUrl = `${adminBase.replace(/\/$/, "")}/login?token=${sessionValue}&account=${account}`;
     res.writeHead(302, { Location: redirectUrl });
     return res.end();
   } catch (err) {

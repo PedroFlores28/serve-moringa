@@ -18,7 +18,13 @@ const allowedOrigins = [
   ...(process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL ? [
     'https://sifrah.vercel.app',
     'https://sifrah-admin.vercel.app',
+    'https://admin-moringa.vercel.app',
+    'https://app-moringa.vercel.app',
   ] : []),
+
+  // Moringa (siempre en prod aunque exista FRONTEND_URL de otro proyecto)
+  'https://admin-moringa.vercel.app',
+  'https://app-moringa.vercel.app',
 ];  
 
 function corsMiddleware(req, res, next) {
