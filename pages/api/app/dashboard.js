@@ -32,12 +32,11 @@ export default async (req, res) => {
   })
 
   const node = await Tree.findOne({ id: user.id })
-  console.log({ node })
+  const childs = node && Array.isArray(node.childs) ? node.childs : []
 
-  const childs = node.childs
-  console.log({ childs })
-
-  let frontals = await User.find({ id: { $in: childs } })
+  let frontals = childs.length
+    ? await User.find({ id: { $in: childs } })
+    : []
   // frontals = frontals.filter(e => e.parentId != user.id)
   console.log({ frontals })
 
@@ -77,23 +76,26 @@ export default async (req, res) => {
     await DashboardConfig.insert(dashboardConfig)
   }
 
-  // get full tree for counting and rank calculations
-  const allTree = await Tree.find({})
-  const treeMap = allTree.reduce((a, b) => { a[b.id] = b; return a }, {})
+  // Red completa: solo cargar tree si el usuario tiene nodo (evita Tree.find({}) enorme)
+  let n_affiliates_total = 0
+  if (node) {
+    const allTree = await Tree.find({})
+    const treeMap = allTree.reduce((a, b) => { a[b.id] = b; return a }, {})
 
-  function countNetwork(id) {
-    if (!treeMap[id]) return 0
-    const node = treeMap[id]
-    let count = 0
-    if (node.childs) {
-      node.childs.forEach(childId => {
-        count += 1 + countNetwork(childId)
-      })
+    function countNetwork(id) {
+      if (!treeMap[id]) return 0
+      const treeNode = treeMap[id]
+      let count = 0
+      if (treeNode.childs && treeNode.childs.length) {
+        treeNode.childs.forEach(childId => {
+          count += 1 + countNetwork(childId)
+        })
+      }
+      return count
     }
-    return count
-  }
 
-  const n_affiliates_total = countNetwork(user.id)
+    n_affiliates_total = countNetwork(user.id)
+  }
 
   // Determine current provisional rank based on real performance
   const rankRequirements = {
