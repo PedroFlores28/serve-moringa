@@ -62,8 +62,22 @@ const Login = async (req, res) => {
     last_active: new Date().toISOString()
   })
 
-  // response
-  return res.json(success({ session }))
+  // response (incluye perfil básico para evitar 2.ª petición pesada en móvil)
+  return res.json(success({
+    session,
+    name: user.name,
+    lastName: user.lastName,
+    email: user.email,
+    photo: user.photo,
+    plan: user.plan,
+    affiliated: user.affiliated,
+    activated: user.activated,
+    _activated: user._activated,
+    country: user.country,
+    tree: user.tree,
+    token: user.token,
+    total_points: user.total_points,
+  }))
 }
 
 export default async (req, res) => { await midd(req, res); return Login(req, res) }
