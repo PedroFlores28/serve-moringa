@@ -3,6 +3,7 @@ import lib from "../../../components/lib";
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 import { requireAdmin } from "../../../components/adminAuth";
+const affiliationBonus = require("../../../lib/affiliationBonus");
 
 // Función inline para enviar el email de bienvenida SIFRAH
 async function sendSifrahWelcomeEmail({ email, name, lastName, dni }) {
@@ -191,75 +192,8 @@ const A = [
 const U = ["name", "lastName", "dni", "phone"];
 
 let users = null;
-let tree = null;
-
-// Definición de pagos fijos por plan y nivel. Cada array tiene 9 valores (uno por cada nivel de profundidad).
-
-const pay = {
-  basic: [90, 15, 10, 5, 5, 1, 1, 1, 1],      // Ejecutivo
-  standard: [300, 60, 20, 10, 10, 5, 5, 5, 5], // Distribuidor
-  master: [500, 100, 100, 50, 50, 10, 10, 10, 10], // Empresario
-};
-
-// Define cuántos niveles puede absorber cada plan
-const absorb_levels = {
-  basic: 3, // Solo recibe pagos de los primeros 3 niveles
-  standard: 6, // Solo recibe pagos de los primeros 6 niveles
-  master: 9, // Recibe pagos de los 9 niveles
-};
 
 let pays = [];
-
-// Función para repartir bonos de afiliación hasta 9 niveles hacia arriba,
-async function pay_bonus(
-  id,
-  i,
-  aff_id,
-  amount,
-  migration,
-  plan_afiliado,
-  _id
-) {
-  const user = users.find((e) => e.id == id);
-  const node = tree.find((e) => e.id == id);
-
-  // Si el usuario no existe, termina la recursión
-  if (!user) return;
-
-  const virtual = user._activated || user.activated ? false : true;
-  const name = migration ? "migration bonus" : "affiliation bonus";
-
-  const fixed_payment = pay[plan_afiliado][i];
-
-  // Solo paga si el usuario puede absorber este nivel y hay pago definido
-  if (i < absorb_levels[user.plan] && fixed_payment && fixed_payment > 0) {
-    const transactionId = rand();
-    await Transaction.insert({
-      id: transactionId,
-      date: new Date(),
-      user_id: user.id,
-      type: "in",
-      value: fixed_payment,
-      name,
-      affiliation_id: aff_id,
-      virtual,
-      _user_id: _id,
-    });
-    pays.push(transactionId);
-  }
-
-  // Siempre reparte hasta 9 niveles hacia arriba (i = 0 a 8)
-  if (i == 8 || !node.parent) return;
-  await pay_bonus(
-    node.parent,
-    i + 1,
-    aff_id,
-    amount,
-    migration,
-    plan_afiliado,
-    _id
-  );
-}
 
 const processingAffiliations = new Set();
 
@@ -494,24 +428,24 @@ const handler = async (req, res) => {
       // CRÍTICO: Actualizar total_points
       await lib.updateTotalPointsCascade(User, Tree, user.id);
 
-      // PAGO DE BONOS (siempre al 100%)
-      tree = await Tree.find({});
+      // Bono afiliación: 120 Bs al patrocinador directo activo (1 nivel)
       users = await User.find({});
+      users = map(users);
       pays = [];
-      const plan = affiliation.plan.id;
-      const amount = affiliation.plan.amount - 50;
 
-      await pay_bonus(
-        user.parentId,
-        0,
-        affiliation.id,
-        amount,
-        false,
-        plan,
-        user.id
-      );
+      const sponsor = user.parentId ? users.get(user.parentId) : null;
+      const bonusTxId = await affiliationBonus.payDirectAffiliationBonus({
+        sponsor,
+        affiliationId: affiliation.id,
+        newMemberId: user.id,
+        Transaction,
+        Affiliation,
+        rand,
+        referenceDate: approvedAt,
+      });
 
-      // Guardar transacciones de bonos
+      if (bonusTxId) pays.push(bonusTxId);
+
       await Affiliation.update({ id }, { transactions: pays });
 
       // UPDATE STOCK

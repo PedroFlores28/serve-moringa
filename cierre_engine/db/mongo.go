@@ -61,6 +61,95 @@ func (db *MongoDB) GetUsers(ctx context.Context) ([]models.User, error) {
 	return users, nil
 }
 
+func (db *MongoDB) GetProducts(ctx context.Context) ([]models.Product, error) {
+	cursor, err := db.DB.Collection("products").Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var products []models.Product
+	if err := cursor.All(ctx, &products); err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
+func (db *MongoDB) GetOpenPeriodKeys(ctx context.Context) ([]string, error) {
+	cursor, err := db.DB.Collection("periods").Find(ctx, bson.M{"status": "open"})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var keys []string
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		if k, ok := doc["key"].(string); ok && k != "" {
+			keys = append(keys, k)
+		}
+	}
+	return keys, cursor.Err()
+}
+
+func (db *MongoDB) GetLastClosedAt(ctx context.Context) (time.Time, bool) {
+	opts := options.FindOne().SetSort(bson.D{{Key: "date", Value: -1}})
+	var doc bson.M
+	err := db.DB.Collection("closeds").FindOne(ctx, bson.M{}, opts).Decode(&doc)
+	if err != nil {
+		return time.Time{}, false
+	}
+	switch t := doc["date"].(type) {
+	case time.Time:
+		return t, true
+	default:
+		return time.Time{}, false
+	}
+}
+
+// GetApprovedActivationsForClosure — activaciones del periodo en curso (periodo abierto o posteriores al último cierre).
+func (db *MongoDB) GetApprovedActivationsForClosure(ctx context.Context) ([]models.Activation, error) {
+	openKeys, err := db.GetOpenPeriodKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := bson.M{"status": "approved"}
+	if len(openKeys) > 0 {
+		or := []bson.M{{"period_key": bson.M{"$in": openKeys}}}
+		if lastClosed, ok := db.GetLastClosedAt(ctx); ok {
+			or = append(or, bson.M{
+				"$and": []bson.M{
+					{"$or": []bson.M{
+						{"period_key": bson.M{"$exists": false}},
+						{"period_key": nil},
+						{"period_key": ""},
+					}},
+					{"date": bson.M{"$gte": lastClosed}},
+				},
+			})
+		}
+		filter["$or"] = or
+	} else if lastClosed, ok := db.GetLastClosedAt(ctx); ok {
+		filter["date"] = bson.M{"$gte": lastClosed}
+	}
+
+	cursor, err := db.DB.Collection("activations").Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var activations []models.Activation
+	if err := cursor.All(ctx, &activations); err != nil {
+		return nil, err
+	}
+	return activations, nil
+}
+
 func (db *MongoDB) GetTree(ctx context.Context) ([]models.TreeNode, error) {
 	cursor, err := db.DB.Collection("tree").Find(ctx, bson.M{})
 	if err != nil {

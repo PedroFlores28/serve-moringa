@@ -210,9 +210,9 @@ func (e *CierreEngine) CalculateResidualBonus(id string, closedRank string) ([]m
 				continue
 			}
 
-			pr := child.Points
+			pr := EffectiveResidualBase(child)
 
-			// Compresión dinámica: solo se incrementa el nivel si el hijo tiene PR > 0.
+			// Compresión dinámica: solo se incrementa el nivel si el hijo tiene base residual > 0.
 			// Si PR = 0, el nodo se salta y sus hijos heredan el nivel actual.
 			nextLevel := currentLevel
 			if pr > 0 {
@@ -236,7 +236,11 @@ func (e *CierreEngine) CalculateResidualBonus(id string, closedRank string) ([]m
 
 					if bonus > 0 {
 						if e.Logger != nil {
-							e.Logger.LogResidual("   Nivel %d: %s %s (PR: %.2f) → %.2f", nextLevel, child.Name, child.LastName, pr, bonus)
+							if child.ResidualVolume > 0 {
+								e.Logger.LogResidual("   Nivel %d: %s %s (Vol. residual: %.2f Bs) → %.2f", nextLevel, child.Name, child.LastName, pr, bonus)
+							} else {
+								e.Logger.LogResidual("   Nivel %d: %s %s (PR: %.2f) → %.2f", nextLevel, child.Name, child.LastName, pr, bonus)
+							}
 						}
 						total += bonus
 						results = append(results, models.Transaction{

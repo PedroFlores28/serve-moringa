@@ -233,8 +233,8 @@ export default async (req, res) => {
       if (p.prices && planId && p.prices[planId] != null && p.prices[planId] !== "") {
         finalPrice = p.prices[planId];
       }
-      // Retornar todas las propiedades del producto y actualizar solo el precio
-      return { ...p, price: finalPrice };
+      const residualProfit = Number(p.residual_profit) || 0;
+      return { ...p, price: finalPrice, residual_profit: residualProfit };
     });
 
     const points = products.reduce((a, b) => a + b.points * b.total, 0)

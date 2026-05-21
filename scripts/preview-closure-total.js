@@ -106,11 +106,11 @@ async function main() {
   const virtualResets = preview.virtual_resets || []
   log(`Nodos en preview: ${tree.length}`)
   const totalVirt = virtualResets.reduce((s, r) => s + (Number(r.amount) || 0), 0)
-  log(`Saldo no disponible (virtual) a quitar: ${virtualResets.length} usuario(s) · total S/ ${totalVirt.toFixed(2)}`)
+  log(`Saldo no disponible (virtual) a quitar: ${virtualResets.length} usuario(s) · total Bs ${totalVirt.toFixed(2)}`)
   if (virtualResets.length) {
     log("--- Usuarios con closed reset (saldo virtual > 0) ---")
     for (const r of virtualResets) {
-      log(`  ${r.id} | ${r.name || "—"} | DNI ${r.dni || "—"} | S/ ${Number(r.amount || 0).toFixed(2)}`)
+      log(`  ${r.id} | ${r.name || "—"} | DNI ${r.dni || "—"} | Bs ${Number(r.amount || 0).toFixed(2)}`)
     }
   }
   log("")

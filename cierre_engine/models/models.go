@@ -28,6 +28,8 @@ type User struct {
 	Affiliated        bool      `bson:"affiliated" json:"affiliated"`
 	ActivatedInternal bool      `bson:"_activated" json:"_activated"`
 	AffiliationDate   time.Time `bson:"affiliation_date" json:"affiliation_date"`
+	// ResidualVolume — suma (cantidad × ganancia residual Bs) del periodo; motor de cierre.
+	ResidualVolume    float64   `bson:"-" json:"-"`
 	// Computed fields (not persisted directly, used for history entry)
 	LastResidualBonus     float64   `bson:"-" json:"-"`
 	LastGenerationalBonus float64   `bson:"-" json:"-"`

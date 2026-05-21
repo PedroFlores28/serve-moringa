@@ -7,7 +7,7 @@
  *   node scripts/report-users-bonuses.js
  *   node scripts/report-users-bonuses.js --json   # además escribe .json
  *
- * Salida: server/reports/ (visible en el IDE; server/logs está en .gitignore)
+ * Salida: server/reports (visible en el IDE; server/logs está en .gitignore)
  */
 
 const path = require("path")
