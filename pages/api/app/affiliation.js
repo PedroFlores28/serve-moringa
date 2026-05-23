@@ -4,6 +4,7 @@ import lib from "../../../components/lib";
 const { User, Session, Plan, Product, Affiliation, Activation, Office, Tree, Transaction, Period } =
   db;
 const { error, success, midd, rand, acum } = lib;
+const { filterAffiliationPlansForUser } = require("../../../lib/affiliationPlans");
 
 let tree;
 
@@ -110,23 +111,7 @@ export default async (req, res) => {
     status: "approved",
   });
 
-  if (affiliation && affiliation.status == "approved") {
-    // if(affiliation.plan.id == 'early') {
-    //  plans.shift()
-    // }
-    if (affiliation.plan.id == "basic") {
-      plans.shift();
-      //  plans.shift()
-    }
-    if (affiliation.plan.id == "standard") {
-      plans.shift();
-      plans.shift();
-      // plans.shift()
-    }
-    if (affiliation.plan.id == "master") {
-      plans = [];
-    }
-  }
+  plans = filterAffiliationPlansForUser(plans, user, affiliation, affiliations);
 
   // get transactions
   const transactions = await Transaction.find({

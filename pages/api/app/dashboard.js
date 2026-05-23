@@ -1,8 +1,10 @@
 import db from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig } = db
+const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig, Activation, Affiliation } = db
 const { error, success, acum, midd, model } = lib
+const { computeMonthlyActivity } = require("../../../lib/monthlyActivity")
+const { computeRankCycleProgress } = require("../../../lib/rankCycles")
 
 const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'address', 'rank', 'points', 'parentId', 'total_points']
 export default async (req, res) => {
@@ -52,6 +54,10 @@ export default async (req, res) => {
   const insVirtual = acum(virtualTransactions, { type: 'in' }, 'value')
   const outsVirtual = acum(virtualTransactions, { type: 'out' }, 'value')
 
+  const totalEarned = (Number(ins) || 0) + (Number(insVirtual) || 0)
+  const availableBalance = (Number(ins) || 0) - (Number(outs) || 0)
+  const unavailableBalance = (Number(insVirtual) || 0) - (Number(outsVirtual) || 0)
+
 
   const banner = await Banner.findOne({})
 
@@ -76,12 +82,21 @@ export default async (req, res) => {
     await DashboardConfig.insert(dashboardConfig)
   }
 
-  // Red completa: solo cargar tree si el usuario tiene nodo (evita Tree.find({}) enorme)
+  // Red completa y actividad mensual
   let n_affiliates_total = 0
-  if (node) {
-    const allTree = await Tree.find({})
-    const treeMap = allTree.reduce((a, b) => { a[b.id] = b; return a }, {})
+  let monthlyActivity = {
+    monthlyPurchaseBs: 0,
+    personalProductCount: 0,
+    groupProductCount: 0,
+    monthlyActive: false,
+    affiliatedThisMonth: false,
+    minActivePurchaseBs: 360,
+  }
 
+  const allTree = await Tree.find({})
+  const treeMap = allTree.reduce((a, b) => { a[b.id] = b; return a }, {})
+
+  if (node) {
     function countNetwork(id) {
       if (!treeMap[id]) return 0
       const treeNode = treeMap[id]
@@ -96,6 +111,41 @@ export default async (req, res) => {
 
     n_affiliates_total = countNetwork(user.id)
   }
+
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  monthStart.setHours(0, 0, 0, 0)
+
+  const networkIds = []
+  function collectIds(id) {
+    const n = treeMap[id]
+    if (!n || !n.childs) return
+    n.childs.forEach((cid) => {
+      networkIds.push(cid)
+      collectIds(cid)
+    })
+  }
+  collectIds(user.id)
+  const activationUserIds = [user.id, ...networkIds]
+
+  const [networkActivations, userAffiliations] = await Promise.all([
+    Activation.find({
+      userId: { $in: activationUserIds },
+      status: "approved",
+      $or: [
+        { date: { $gte: monthStart } },
+        { approved_at: { $gte: monthStart } },
+      ],
+    }),
+    Affiliation.find({ userId: user.id, status: "approved" }),
+  ])
+
+  monthlyActivity = computeMonthlyActivity(
+    user,
+    allTree,
+    userAffiliations,
+    networkActivations
+  )
 
   // Determine current provisional rank based on real performance
   const rankRequirements = {
@@ -131,18 +181,15 @@ export default async (req, res) => {
   const provisionalRankIndex = rankOrder.indexOf(provisionalRank)
   const nextRankName = provisionalRankIndex < rankOrder.length - 1 ? rankOrder[provisionalRankIndex + 1] : null
 
-  let nextRankPercentage = 0
-  if (nextRankName) {
-    const req = rankRequirements[nextRankName] || (nextRankName === 'active' ? { points: 1, childs: 0 } : null)
-    if (req) {
-      if (nextRankName === 'active') {
-        nextRankPercentage = (user.activated || user._activated) ? 100 : 0
-      } else {
-        const pointsProgress = Math.min(100, (currentTotalPoints * 100) / req.points)
-        const childsProgress = Math.min(100, (currentDirects * 100) / req.childs)
-        nextRankPercentage = Math.floor((pointsProgress + childsProgress) / 2)
-      }
-    }
+  const rankCycle = computeRankCycleProgress(
+    nextRankName || "star",
+    monthlyActivity.groupProductCount,
+    currentDirects
+  )
+
+  let nextRankPercentage = rankCycle.overallPct
+  if (nextRankName === "active") {
+    nextRankPercentage = (user.activated || user._activated) ? 100 : 0
   }
 
   // response
@@ -166,9 +213,12 @@ export default async (req, res) => {
     ins,
     insVirtual,
     outs,
-    balance: (ins - outs),
+    balance: availableBalance,
     sifrahBalance: (sifrahIns - sifrahOuts),
-    _balance: (insVirtual - outsVirtual),
+    _balance: unavailableBalance,
+    totalEarned,
+    availableBalance,
+    unavailableBalance,
     rank: user.rank,
     points: user.points,
     plans,
@@ -178,5 +228,12 @@ export default async (req, res) => {
     nextRankName,
     nextRankPercentage,
     provisionalRank,
+    monthlyPurchaseBs: monthlyActivity.monthlyPurchaseBs,
+    personalProductCount: monthlyActivity.personalProductCount,
+    groupProductCount: monthlyActivity.groupProductCount,
+    monthlyActive: monthlyActivity.monthlyActive,
+    affiliatedThisMonth: monthlyActivity.affiliatedThisMonth,
+    minActivePurchaseBs: monthlyActivity.minActivePurchaseBs,
+    rankCycle,
   }))
 }
