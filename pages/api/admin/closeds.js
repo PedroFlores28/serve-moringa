@@ -2,8 +2,8 @@ import db from "../../../components/db"
 import lib from "../../../components/lib"
 import path from "path"
 import dotenv from "dotenv"
-import fs from "fs"
 import { requireAdmin } from "../../../components/adminAuth";
+import { runCierre } from "../../../lib/cierreEngine"
 
 dotenv.config({ path: path.resolve(process.cwd(), "../db/.env") })
 dotenv.config({ path: path.resolve(process.cwd(), "./.env.local") })
@@ -140,113 +140,7 @@ function buildLegDetails(previewTree, usersList, treeList) {
   })
 }
 
-/** Env para el motor Go (main.go: DB_URL_DEV / DB_URL_PROD). */
-function buildCierreGoEnv() {
-  const dbUrl =
-    process.env.DB_URL_DEV ||
-    process.env.DB_URL_PROD ||
-    process.env.DB_URL ||
-    process.env.MONGODB_URI
-  return {
-    ...process.env,
-    DB_URL_PROD: process.env.DB_URL_PROD || process.env.DB_URL || process.env.MONGODB_URI || dbUrl,
-    DB_NAME_PROD: process.env.DB_NAME_PROD || process.env.DB_NAME || "sifrah",
-    DB_URL_DEV: process.env.DB_URL_DEV || process.env.DB_URL || process.env.MONGODB_URI || dbUrl,
-    DB_NAME_DEV: process.env.DB_NAME_DEV || process.env.DB_NAME || "sifrah",
-  }
-}
-
-function hasMongoUri(goEnv) {
-  const u = goEnv.DB_URL_DEV || goEnv.DB_URL_PROD
-  return !!(u && String(u).trim())
-}
-
-/**
- * Cursor (y otros agentes) pueden inyectar GOMODCACHE/GOCACHE bajo un directorio
- * `cursor-sandbox-cache` incompleto; `go run` hereda eso desde Next y falla con
- * "no such file or directory" en el driver de Mongo. Quitamos esas rutas para que
- * Go use el caché real del usuario ($HOME/go/pkg/mod, etc.).
- */
-function envForChildGo(goEnv) {
-  const e = { ...goEnv }
-  const poisoned = (v) =>
-    typeof v === "string" &&
-    (v.includes("cursor-sandbox-cache") || v.includes("cursor-sandbox"))
-  for (const k of ["GOMODCACHE", "GOPATH", "GOCACHE", "GOTMPDIR"]) {
-    if (poisoned(e[k])) delete e[k]
-  }
-  return e
-}
-
-const CIERRE_EXEC_MAX_BUFFER = 100 * 1024 * 1024
-
-/**
- * Ejecuta el motor: binario Linux en servidor, binario local `cierre_engine` si existe, si no `go run`.
- * @param {string} engineCwd
- * @param {NodeJS.ProcessEnv} goEnv
- * @param {{ preview: boolean }} opts preview = dry-run + JSON a stdout
- */
-function runCierreEngine(engineCwd, goEnv, opts) {
-  const { execFileSync, execSync } = require("child_process")
-  const os = require("os")
-  const platform = os.platform()
-  const childEnv = envForChildGo(goEnv)
-  const baseOpts = {
-    cwd: engineCwd,
-    env: childEnv,
-    encoding: "utf8",
-    maxBuffer: CIERRE_EXEC_MAX_BUFFER,
-  }
-
-  const linuxBinaryPath = path.join(engineCwd, "engine_linux")
-  const localBinaryName = platform === "win32" ? "cierre_engine.exe" : "cierre_engine"
-  const localBinaryPath = path.join(engineCwd, localBinaryName)
-  const previewArgs = opts.preview ? ["--dry-run", "--json"] : []
-
-  if (platform === "linux" && fs.existsSync(linuxBinaryPath)) {
-    return execFileSync(linuxBinaryPath, previewArgs, baseOpts)
-  }
-  if (fs.existsSync(localBinaryPath)) {
-    return execFileSync(localBinaryPath, previewArgs, baseOpts)
-  }
-
-  const goArgs = opts.preview ? ["run", ".", "--dry-run", "--json"] : ["run", "."]
-  try {
-    return execFileSync("go", goArgs, baseOpts)
-  } catch (e) {
-    if (e.code === "ENOENT") {
-      const cmd = opts.preview ? "go run . --dry-run --json" : "go run ."
-      return execSync(cmd, { ...baseOpts, shell: true })
-    }
-    throw e
-  }
-}
-
-function tryParseEnginePreviewJson(output) {
-  const s = String(output || "").trim()
-  try {
-    return JSON.parse(s)
-  } catch (first) {
-    const start = s.indexOf("{")
-    const end = s.lastIndexOf("}")
-    if (start >= 0 && end > start) {
-      return JSON.parse(s.slice(start, end + 1))
-    }
-    throw first
-  }
-}
-
-function cierreEngineErrorBody(error, title) {
-  const stderr = error.stderr != null ? String(error.stderr) : ""
-  const stdout = error.stdout != null ? String(error.stdout) : ""
-  const isDev = process.env.NODE_ENV !== "production"
-  return {
-    error: title,
-    details: isDev ? error.message || String(error) : undefined,
-    stderr: isDev ? stderr.slice(0, 4000) : undefined,
-    stdoutHint: isDev && stdout ? stdout.slice(0, 800) : undefined,
-  }
-}
+/* Helpers Go retirados: el cierre ahora corre 100% en JavaScript (serve/lib/cierreEngine.js). */
 
 const Pay = {
   'star':                 15,
@@ -504,22 +398,11 @@ export default async (req, res) => {
 
     const { action } = req.body
 
-    if (action == 'new') { ; console.log('preview via Go Engine...')
+    if (action == 'new') { ; console.log('preview via JS engine...')
 
       try {
-        const engineCwd = path.resolve(process.cwd(), 'cierre_engine');
-        const goEnv = buildCierreGoEnv();
+        const result = await runCierre({ preview: true, rand: () => rand() })
 
-        if (!hasMongoUri(goEnv)) {
-          return res.status(500).json({
-            error: 'Falta conexión a MongoDB para el motor de cierre',
-            details:
-              'En server/.env define DB_URL_DEV, DB_URL_PROD, DB_URL o MONGODB_URI (misma URI que usa el server Node).',
-          });
-        }
-
-        const output = runCierreEngine(engineCwd, goEnv, { preview: true });
-        const result = tryParseEnginePreviewJson(output);
         const usersList = await User.find({})
         const treeList = await Tree.find({})
         const enrichedTree = buildLegDetails(result.tree, usersList, treeList)
@@ -539,49 +422,31 @@ export default async (req, res) => {
           usersList
         )
 
-        return res.json(success({ 
-          tree: treeWithRankBonuses, 
+        return res.json(success({
+          tree: treeWithRankBonuses,
           virtual_resets: result.virtual_resets || [],
-          affiliations: result.affiliations, 
-          activations: result.activations 
-        }));
+          affiliations: result.affiliations || [],
+          activations: result.activations || [],
+        }))
 
       } catch (error) {
-        console.error('❌ Error executing Go Engine (new):', error);
-        return res
-          .status(500)
-          .json(
-            cierreEngineErrorBody(error, 'Error al previsualizar el cierre con Go')
-          );
+        console.error('❌ Error en preview del cierre (JS):', error)
+        return res.status(500).json({
+          error: 'Error al previsualizar el cierre',
+          details: error && error.message ? error.message : String(error),
+        })
       }
-
-      /* Original JS logic preserved
-      ...
-      */
     }
 
-    if (action == 'save') { ; console.log('save via Go Engine...')
+    if (action == 'save') { ; console.log('save via JS engine...')
 
       try {
-        const engineCwd = path.resolve(process.cwd(), 'cierre_engine');
-        const goEnv = buildCierreGoEnv();
-
-        if (!hasMongoUri(goEnv)) {
-          return res.status(500).json({
-            error: 'Falta conexión a MongoDB para el motor de cierre',
-            details:
-              'En server/.env define DB_URL_DEV, DB_URL_PROD, DB_URL o MONGODB_URI (misma URI que usa el server Node).',
-          });
-        }
-
-        const output = runCierreEngine(engineCwd, goEnv, { preview: false });
-
-        console.log('✅ Go Engine output:', output);
+        const summary = await runCierre({ preview: false, rand: () => rand() })
 
         const periodResult = await closeActivePeriodAndOpenNext()
 
         const periodKey =
-          periodResult.closedPeriod?.key ||
+          (periodResult.closedPeriod && periodResult.closedPeriod.key) ||
           buildPeriodKey(new Date().getFullYear(), new Date().getMonth() + 1)
 
         const { applyRankBonusesAfterGoClose } = require("../../../lib/applyRankBonusesOnClose")
@@ -592,24 +457,31 @@ export default async (req, res) => {
             rand: () => rand(),
           })
         } catch (rankErr) {
-          console.error("❌ Bonos por rango post-cierre Go:", rankErr)
+          console.error("❌ Bonos por rango post-cierre:", rankErr)
           rankBonuses = { error: String(rankErr.message || rankErr) }
         }
 
-        return res.json(success({ 
-          message: 'Cierre completado con éxito vía Go Engine',
-          summary: output,
+        return res.json(success({
+          message: 'Cierre completado con éxito',
+          summary: {
+            closed_id: summary.closed_id,
+            users_processed: summary.users_processed,
+            reset_count: summary.reset_count,
+            residual_total: summary.residual_total,
+            generational_total: summary.generational_total,
+            savings_total: summary.savings_total,
+            bonus_transactions: summary.bonus_transactions,
+          },
           period: periodResult,
           rank_bonuses: rankBonuses,
-        }));
+        }))
 
       } catch (error) {
-        console.error('❌ Error executing Go Engine:', error);
-        return res
-          .status(500)
-          .json(
-            cierreEngineErrorBody(error, 'Error crítico en el motor de cierre Go')
-          );
+        console.error('❌ Error ejecutando cierre (JS):', error)
+        return res.status(500).json({
+          error: 'Error crítico en el motor de cierre',
+          details: error && error.message ? error.message : String(error),
+        })
       }
 
       /* Original JS logic preserved for reference
