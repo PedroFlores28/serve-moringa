@@ -233,8 +233,18 @@ export default async (req, res) => {
       if (p.prices && planId && p.prices[planId] != null && p.prices[planId] !== "") {
         finalPrice = p.prices[planId];
       }
+
       const residualProfit = Number(p.residual_profit) || 0;
-      return { ...p, price: finalPrice, residual_profit: residualProfit };
+      const residualProfitLevels = Array.isArray(p.residual_profit_levels)
+        ? p.residual_profit_levels.slice(0, 8).map((v) => Number(v) || 0)
+        : Array.from({ length: 8 }, () => residualProfit);
+
+      return {
+        ...p,
+        price: finalPrice,
+        residual_profit: residualProfitLevels[0] || 0,
+        residual_profit_levels: residualProfitLevels,
+      };
     });
 
     const points = products.reduce((a, b) => a + b.points * b.total, 0)

@@ -5,6 +5,17 @@ import { requireAdmin } from "../../../components/adminAuth";
 const { Product, Plan } = db;
 const { midd, success, rand } = lib;
 
+function normalizeResidualProfitLevels(levels, fallbackResidualProfit = 0) {
+  const out = Array.from({ length: 8 }, () => Number(fallbackResidualProfit) || 0)
+  if (Array.isArray(levels)) {
+    for (let i = 0; i < 8; i++) {
+      const v = Number(levels[i])
+      out[i] = Number.isFinite(v) && v >= 0 ? v : 0
+    }
+  }
+  return out
+}
+
 export default async (req, res) => {
   await midd(req, res);
   const auth = await requireAdmin(req, res);
@@ -40,6 +51,7 @@ export default async (req, res) => {
         _weight,
         _prices,
         residual_profit = 0,
+        residual_profit_levels = null,
         is_savings_bonus = false,
         savings_price = 0,
         savings_description = "",
@@ -54,6 +66,11 @@ export default async (req, res) => {
       allPlans.forEach((plan) => {
         plansObject[plan.id] = _plans[plan.id] || false;
       });
+
+      const normalizedLevels = normalizeResidualProfitLevels(
+        residual_profit_levels,
+        Number(residual_profit) || 0
+      )
 
       await Product.update(
         { id },
@@ -70,6 +87,7 @@ export default async (req, res) => {
           weight: _weight,
           prices: _prices,
           residual_profit: Number(residual_profit) || 0,
+          residual_profit_levels: normalizedLevels,
           is_savings_bonus,
           savings_price,
           savings_description,
@@ -92,6 +110,7 @@ export default async (req, res) => {
         weight,
         prices,
         residual_profit = 0,
+        residual_profit_levels = null,
         is_savings_bonus = false,
         savings_price = 0,
         savings_description = "",
@@ -107,6 +126,11 @@ export default async (req, res) => {
         plansObject[plan.id] = plans[plan.id] || false;
       });
 
+      const normalizedLevels = normalizeResidualProfitLevels(
+        residual_profit_levels,
+        Number(residual_profit) || 0
+      )
+
       await Product.insert({
         id: rand(),
         code,
@@ -121,6 +145,7 @@ export default async (req, res) => {
         weight,
         prices,
         residual_profit: Number(residual_profit) || 0,
+        residual_profit_levels: normalizedLevels,
         is_savings_bonus,
         savings_price,
         savings_description,

@@ -40,6 +40,16 @@ function resolveYearMonthFromPeriod(period) {
   return { year: ref.getFullYear(), month: ref.getMonth() + 1 }
 }
 
+async function getActivePeriodReferenceDate() {
+  const openPeriods = await Period.find({ status: "open" })
+  if (!openPeriods || !openPeriods.length) return new Date()
+
+  openPeriods.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+  const activePeriod = openPeriods[0]
+  const { year, month } = resolveYearMonthFromPeriod(activePeriod)
+  return new Date(year, month - 1, 1)
+}
+
 async function closeActivePeriodAndOpenNext() {
   const now = new Date()
   const openPeriods = await Period.find({ status: "open" })
@@ -401,7 +411,8 @@ export default async (req, res) => {
     if (action == 'new') { ; console.log('preview via JS engine...')
 
       try {
-        const result = await runCierre({ preview: true, rand: () => rand() })
+        const referenceDate = await getActivePeriodReferenceDate()
+        const result = await runCierre({ preview: true, rand: () => rand(), referenceDate })
 
         const usersList = await User.find({})
         const treeList = await Tree.find({})
@@ -441,13 +452,14 @@ export default async (req, res) => {
     if (action == 'save') { ; console.log('save via JS engine...')
 
       try {
-        const summary = await runCierre({ preview: false, rand: () => rand() })
+        const referenceDate = await getActivePeriodReferenceDate()
+        const summary = await runCierre({ preview: false, rand: () => rand(), referenceDate })
 
         const periodResult = await closeActivePeriodAndOpenNext()
 
         const periodKey =
           (periodResult.closedPeriod && periodResult.closedPeriod.key) ||
-          buildPeriodKey(new Date().getFullYear(), new Date().getMonth() + 1)
+          buildPeriodKey(referenceDate.getFullYear(), referenceDate.getMonth() + 1)
 
         const { applyRankBonusesAfterGoClose } = require("../../../lib/applyRankBonusesOnClose")
         let rankBonuses = null
