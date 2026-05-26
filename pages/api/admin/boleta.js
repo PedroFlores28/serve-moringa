@@ -51,6 +51,11 @@ export default async (req, res) => {
       });
     }
 
+    const dbName = process.env.DB_NAME || "sifrah";
+    const isMoringa = dbName.toLowerCase().includes("moringa");
+    const brand = isMoringa ? "CLASS MORINGA" : "SIFRAH";
+    const currency = "Bs.";
+
     return res.json(
       lib.success({
         orderData: {
@@ -58,7 +63,9 @@ export default async (req, res) => {
           orderNumber: doc.id,
           date: doc.date,
           total,
-          payMethod: doc.pay_method
+          payMethod: doc.pay_method,
+          brand,
+          currency
         },
         clientData: {
           fullName: `${user.name} ${user.lastName}`.trim(),
