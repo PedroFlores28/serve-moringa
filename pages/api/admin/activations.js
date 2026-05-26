@@ -9,6 +9,48 @@ const name = process.env.DB_NAME;
 const { Activation, Affiliation, User, Tree, Token, Office, Transaction, Closed, Period } = db;
 const { error, success, midd, ids, map, model, rand } = lib;
 
+const { isClassOrEmpresarioPlan } = require("../../../lib/monthlyActivity")
+
+function monthBounds(referenceDate) {
+  const d = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
+  const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0)
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
+  return { start, end }
+}
+
+async function computeActivatedByMonthlyCriteria(userId, referenceDate) {
+  const { start, end } = monthBounds(referenceDate)
+
+  const monthActivations = await Activation.find({
+    userId,
+    status: "approved",
+    $or: [
+      { date: { $gte: start, $lte: end } },
+      { approved_at: { $gte: start, $lte: end } },
+    ],
+  })
+
+  const monthlyPurchaseBs = (monthActivations || []).reduce(
+    (sum, a) => sum + Number(a.price || 0),
+    0
+  )
+
+  const monthAffiliations = await Affiliation.find({
+    userId,
+    status: "approved",
+    $or: [
+      { date: { $gte: start, $lte: end } },
+      { approved_at: { $gte: start, $lte: end } },
+    ],
+  })
+
+  const affiliatedThisMonth = (monthAffiliations || []).some((aff) =>
+    isClassOrEmpresarioPlan(aff.plan)
+  )
+
+  return monthlyPurchaseBs >= 360 || affiliatedThisMonth
+}
+
 /**
  * Determina el periodo correcto al momento de la aprobación.
  * Reglas:
@@ -307,9 +349,58 @@ export default async (req, res) => {
 
       // Verificar si el usuario estaba activado ANTES de esta aprobación
       const wasActivatedBefore = user.activated;
-      
-      const activated = user.activated ? true : points_total >= 120;
-      console.log({ activated });
+
+      // Validación automática por mes:
+      // Usuario es "Activo" si en el mes tiene reconsumo aprobado acumulado >= 360 Bs
+      // o si se afilió aprobado con CLASS/EMPRESARIO durante el mes.
+      const monthStart = new Date(
+        approvedAt.getFullYear(),
+        approvedAt.getMonth(),
+        1,
+        0,
+        0,
+        0,
+        0
+      );
+      const monthEnd = new Date(
+        approvedAt.getFullYear(),
+        approvedAt.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      );
+
+      const monthActivations = await Activation.find({
+        userId: user.id,
+        status: "approved",
+        $or: [
+          { date: { $gte: monthStart, $lte: monthEnd } },
+          { approved_at: { $gte: monthStart, $lte: monthEnd } },
+        ],
+      });
+
+      const monthlyPurchaseBs = (monthActivations || []).reduce(
+        (sum, a) => sum + Number(a.price || 0),
+        0
+      );
+
+      const monthAffiliations = await Affiliation.find({
+        userId: user.id,
+        status: "approved",
+        $or: [
+          { date: { $gte: monthStart, $lte: monthEnd } },
+          { approved_at: { $gte: monthStart, $lte: monthEnd } },
+        ],
+      });
+
+      const affiliatedThisMonth = (monthAffiliations || []).some((aff) =>
+        isClassOrEmpresarioPlan(aff.plan)
+      );
+
+      const activated = monthlyPurchaseBs >= 360 || affiliatedThisMonth;
+      console.log({ activated, monthlyPurchaseBs, affiliatedThisMonth });
       console.log('Usuario estaba activado antes:', wasActivatedBefore);
       console.log('Usuario está activado ahora:', activated);
 
@@ -317,13 +408,14 @@ export default async (req, res) => {
         { id: user.id },
         {
           activated,
+          _activated: activated,
           points: points_total,
         }
       );
       await lib.updateTotalPointsCascade(User, Tree, user.id);
 
       // Migrar saldo solo cuando el usuario se activa por primera vez (cambia de false a true)
-      // Esto ocurre cuando el usuario alcanza 120 puntos por primera vez
+      // Esto ocurre cuando el usuario alcanza el criterio mensual por primera vez.
       const isFirstTimeActivation = !wasActivatedBefore && activated;
       
       console.log('¿Es primera activación?', isFirstTimeActivation);
@@ -551,12 +643,13 @@ export default async (req, res) => {
       user.points = user.points - activation.points;
 
       await User.update({ id: user.id }, { points: user.points });
-      const activated = user.activated ? true : user.points >= 120;
+      const activated = await computeActivatedByMonthlyCriteria(user.id, new Date());
 
       await User.update(
         { id: user.id },
         {
           activated,
+          _activated: activated,
         }
       );
 
@@ -609,13 +702,17 @@ export default async (req, res) => {
         console.log(`Revirtiendo puntos: ${user.points} - ${activation.points} = ${new_points}`);
         
         // Recalcular estados de activación
-        const activated = user.activated ? (new_points >= 120) : false;
+        const activated = await computeActivatedByMonthlyCriteria(
+          user.id,
+          new Date()
+        );
         
         await User.update(
           { id: user.id },
           {
             points: new_points,
             activated,
+            _activated: activated,
           }
         );
         
