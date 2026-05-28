@@ -27,18 +27,32 @@ const allowedOrigins = [
   'https://app-moringa.vercel.app',
 ];  
 
-function corsMiddleware(req, res, next) {
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (allowedOrigins.includes(origin)) return true;
+
+  // Permitir despliegues preview de Vercel para evitar bloqueos CORS en pruebas.
+  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return true;
+
+  return false;
+}
+
+function setAllowOriginHeader(req, res) {
   const origin = req.headers.origin;
-  
-  // Siempre permitir el origen de la request si está en la lista permitida
-  if (origin && allowedOrigins.includes(origin)) {
+
+  if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } 
-  // En desarrollo, usar localhost:8081 por defecto si no está en la lista
-  else if (process.env.NODE_ENV !== 'production') {
+  } else if (process.env.NODE_ENV !== 'production') {
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
+  } else if (origin) {
+    // Fallback defensivo: evita "Failed to fetch" por CORS en dominios productivos nuevos.
+    res.setHeader('Access-Control-Allow-Origin', origin);
   }
-  
+}
+
+function corsMiddleware(req, res, next) {
+  setAllowOriginHeader(req, res);
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-file-name, x-dir, sentry-trace, baggage');
@@ -54,17 +68,8 @@ function corsMiddleware(req, res, next) {
 
 // Función para aplicar CORS a una respuesta específica
 function applyCORS(req, res) {
-  const origin = req.headers.origin;
-  
-  // Siempre permitir el origen de la request si está en la lista permitida
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } 
-  // En desarrollo, usar localhost:8081 por defecto si no está en la lista
-  else if (process.env.NODE_ENV !== 'production') {
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
-  }
-  
+  setAllowOriginHeader(req, res);
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-file-name, x-dir, sentry-trace, baggage');
