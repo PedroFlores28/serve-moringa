@@ -3,7 +3,7 @@ import db from "../../../components/db";
 import lib from "../../../components/lib";
 import { requireAdmin } from "../../../components/adminAuth";
 
-const { User, Transaction, Closed } = db;
+const { User, Transaction, Closed, Activation, Affiliation } = db;
 const { error, success, midd, model } = lib;
 
 // valid filters
@@ -35,6 +35,7 @@ const U = [
   "city",
   "plan",
   "affiliation_points",
+  "totalBoughtProducts",
 ];
 
 /** Campos del patrocinador expuestos al admin (evita filtrar `parent` con `model(user, U)`). */
@@ -321,6 +322,50 @@ const handler = async (req, res) => {
       return total + (virtualIns - virtualOuts); // Sumar el saldo virtual de cada usuario
     }, 0);
 
+    // Calcular productos comprados este mes para cada usuario en la página
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const endOfMonth = new Date();
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+    endOfMonth.setDate(0);
+    endOfMonth.setHours(23, 59, 59, 999);
+
+    const userIdsForProducts = users.map((u) => u.id);
+
+    const pageActivations = await Activation.find({
+      userId: { $in: userIdsForProducts },
+      status: "approved",
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    });
+
+    const pageAffiliations = await Affiliation.find({
+      userId: { $in: userIdsForProducts },
+      status: "approved",
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    });
+
+    const countItemsProducts = (items) => {
+      let count = 0;
+      for (const item of items) {
+        if (item.products && Array.isArray(item.products)) {
+          for (const p of item.products) {
+            if (p && typeof p === "object") {
+              if (Array.isArray(p.list)) {
+                for (const subP of p.list) {
+                  count += Number(subP.total) || 0;
+                }
+              } else {
+                count += Number(p.total) || 0;
+              }
+            }
+          }
+        }
+      }
+      return count;
+    };
+
     // Calcular el saldo para los usuarios que se están enviando
     users = users.map((user) => {
       const ins = transactions
@@ -346,6 +391,11 @@ const handler = async (req, res) => {
         .filter((i) => i.user_id == user.id && i.type == "out")
         .reduce((a, b) => a + parseFloat(b.value), 0);
       user.virtualbalance = virtualIns - virtualOuts;
+
+      // Calcular cantidad de productos comprados durante el mes
+      const userAct = pageActivations.filter((a) => a.userId == user.id);
+      const userAff = pageAffiliations.filter((a) => a.userId == user.id);
+      user.totalBoughtProducts = countItemsProducts(userAct) + countItemsProducts(userAff);
 
       return user; // Asegúrate de devolver el usuario modificado
     });

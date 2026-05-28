@@ -42,6 +42,31 @@ const handler = async (req, res) => {
     console.log(`[BunnyUp] Zone: ${storageZoneName} | Host: ${storageHostname} | PullZone: ${pullZoneUrl}`);
     console.log(`[BunnyUp] Password set: ${!!storagePassword}`);
 
+    // LOCAL DEVELOPMENT FALLBACK
+    // Si no está configurada la contraseña del CDN en el entorno local (.env omitido),
+    // guardamos el archivo localmente en la carpeta public/uploads de Next.js
+    if (!storagePassword) {
+      console.warn(`[BunnyUp] WARNING: BUNNY_STORAGE_PASSWORD is not set. Saving file locally for local development...`);
+      const fs = require('fs');
+      const pathLib = require('path');
+      const publicDir = pathLib.join(process.cwd(), 'public');
+      const uploadsDir = pathLib.join(publicDir, 'uploads');
+      
+      if (!fs.existsSync(publicDir)) {
+        fs.mkdirSync(publicDir);
+      }
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir);
+      }
+      
+      const localFilePath = pathLib.join(uploadsDir, fileName);
+      fs.writeFileSync(localFilePath, buffer);
+      
+      const localUrl = `/uploads/${fileName}`;
+      console.log(`[BunnyUp] Local fallback success! URL: ${localUrl}`);
+      return res.status(200).json({ url: localUrl });
+    }
+
     const folderMapping = {
       'perfil': 'perfiles', 'photos': 'perfiles', 'audios': 'audios',
       'product': 'productos', 'banner': 'banners', 'flyer': 'flyers'
