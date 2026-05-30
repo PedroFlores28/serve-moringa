@@ -110,6 +110,7 @@ export default async (req, res) => {
     userId: user.id,
     status: "approved",
   });
+  const affiliationHistory = await Affiliation.find({ userId: user.id });
 
   plans = filterAffiliationPlansForUser(plans, user, affiliation, affiliations);
 
@@ -162,6 +163,7 @@ export default async (req, res) => {
         products,
         affiliation,
         affiliations,
+        affiliationHistory,
         offices,
 
         balance,
