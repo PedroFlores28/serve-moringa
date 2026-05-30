@@ -12,7 +12,7 @@ import {
   recordInMonthScope,
 } from "../../../lib/productTotals";
 
-const { User, Transaction, Closed, Activation, Affiliation, Period } = db;
+const { User, Transaction, Closed, Activation, Affiliation } = db;
 const { error, success, midd, model } = lib;
 
 // valid filters
@@ -278,18 +278,19 @@ const handler = async (req, res) => {
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
 
-    const searchNormalized = normalize(search);
-
-    allUsers = allUsers.filter((user) => {
-      return (
-        normalize(user.name).includes(searchNormalized) ||
-        normalize(user.lastName).includes(searchNormalized) ||
-        normalize(user.dni).includes(searchNormalized) ||
-        normalize(user.phone).includes(searchNormalized) ||
-        normalize(user.department).includes(searchNormalized) ||
-        normalize(user.city).includes(searchNormalized)
-      );
-    });
+    if (search != null && String(search).trim() !== "") {
+      const searchNormalized = normalize(search);
+      allUsers = allUsers.filter((user) => {
+        return (
+          normalize(user.name).includes(searchNormalized) ||
+          normalize(user.lastName).includes(searchNormalized) ||
+          normalize(user.dni).includes(searchNormalized) ||
+          normalize(user.phone).includes(searchNormalized) ||
+          normalize(user.department).includes(searchNormalized) ||
+          normalize(user.city).includes(searchNormalized)
+        );
+      });
+    }
     console.log({ allUsers });
 
     // Ordenar usuarios por fecha (más reciente primero)
@@ -349,46 +350,38 @@ const handler = async (req, res) => {
       return total + (virtualIns - virtualOuts); // Sumar el saldo virtual de cada usuario
     }, 0);
 
-  const now = new Date();
-  const monthScope = {
-    start: startOfCalendarMonth(now),
-    end: endOfCalendarMonth(now),
-    periodKeys: [calendarMonthKey(now)],
-  };
-  const openPeriods = await Period.find({ status: "open" });
-  if (openPeriods && openPeriods.length) {
-    openPeriods.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    const openKey = openPeriods[0] && openPeriods[0].key;
-    if (openKey && !monthScope.periodKeys.includes(openKey)) {
-      monthScope.periodKeys.push(openKey);
-    }
-  }
+    const now = new Date();
+    const monthScope = {
+      start: startOfCalendarMonth(now),
+      end: endOfCalendarMonth(now),
+      periodKeys: [calendarMonthKey(now)],
+    };
 
-  const userIdsForProducts = expandIdsForIn(users.map((u) => u.id));
-  const monthDateFilter = { $gte: monthScope.start, $lte: monthScope.end };
-  const monthOrFilter = {
-    $or: [
-      { date: monthDateFilter },
-      { approved_at: monthDateFilter },
-      { period_key: { $in: monthScope.periodKeys } },
-    ],
-  };
+    const userIdsForProducts = expandIdsForIn(users.map((u) => u.id));
+    const monthDateFilter = { $gte: monthScope.start, $lte: monthScope.end };
+    const monthOrFilter = {
+      $or: [
+        { date: monthDateFilter },
+        { approved_at: monthDateFilter },
+        { period_key: calendarMonthKey(now) },
+      ],
+    };
 
-  const pageActivations = userIdsForProducts.length
-    ? await Activation.find({
-        userId: { $in: userIdsForProducts },
-        status: "approved",
-        ...monthOrFilter,
-      })
-    : [];
+    const pageActivations = userIdsForProducts.length
+      ? await Activation.find({
+          userId: { $in: userIdsForProducts },
+          status: "approved",
+          ...monthOrFilter,
+        })
+      : [];
 
-  const pageAffiliations = userIdsForProducts.length
-    ? await Affiliation.find({
-        userId: { $in: userIdsForProducts },
-        status: "approved",
-        ...monthOrFilter,
-      })
-    : [];
+    const pageAffiliations = userIdsForProducts.length
+      ? await Affiliation.find({
+          userId: { $in: userIdsForProducts },
+          status: "approved",
+          ...monthOrFilter,
+        })
+      : [];
 
     const approvedAffiliationsForPlan = await Affiliation.find({
       userId: { $in: userIdsForProducts },
