@@ -50,8 +50,6 @@ export default async (req, res) => {
 
   const ins = transactions.filter(t => t.type === 'in' && t.wallet_tipo !== 'BONO_AHORRO').reduce((sum, t) => sum + Number(t.value || 0), 0)
   const outs = transactions.filter(t => t.type === 'out' && t.wallet_tipo !== 'BONO_AHORRO').reduce((sum, t) => sum + Number(t.value || 0), 0)
-  const sifrahIns = transactions.filter(t => t.type === 'in' && t.wallet_tipo === 'BONO_AHORRO').reduce((sum, t) => sum + Number(t.value || 0), 0)
-  const sifrahOuts = transactions.filter(t => t.type === 'out' && t.wallet_tipo === 'BONO_AHORRO').reduce((sum, t) => sum + Number(t.value || 0), 0)
   
   const insVirtual = acum(virtualTransactions, { type: 'in' }, 'value')
   const outsVirtual = acum(virtualTransactions, { type: 'out' }, 'value')
@@ -216,7 +214,6 @@ export default async (req, res) => {
     insVirtual,
     outs,
     balance: availableBalance,
-    sifrahBalance: (sifrahIns - sifrahOuts),
     _balance: unavailableBalance,
     totalEarned,
     availableBalance,

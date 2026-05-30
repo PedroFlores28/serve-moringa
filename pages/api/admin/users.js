@@ -35,7 +35,6 @@ const U = [
   "points",
   "balance",
   "virtualbalance",
-  "sifrahbalance",
   "country",
   "rank",
   "rank_history",
@@ -421,14 +420,6 @@ const handler = async (req, res) => {
         .reduce((a, b) => a + parseFloat(b.value), 0);
       user.balance = ins - outs;
 
-      const sifrahIns = transactions
-        .filter((i) => i.user_id == user.id && i.type == "in" && i.wallet_tipo === "BONO_AHORRO")
-        .reduce((a, b) => a + parseFloat(b.value), 0);
-      const sifrahOuts = transactions
-        .filter((i) => i.user_id == user.id && i.type == "out" && i.wallet_tipo === "BONO_AHORRO")
-        .reduce((a, b) => a + parseFloat(b.value), 0);
-      user.sifrahbalance = sifrahIns - sifrahOuts;
-
       const virtualIns = virtualTransactions
         .filter((i) => i.user_id == user.id && i.type == "in")
         .reduce((a, b) => a + parseFloat(b.value), 0);
@@ -447,9 +438,8 @@ const handler = async (req, res) => {
     // parse user
     users = users.map((user) => {
       const u = model(user, U);
-      // Asegurar que virtualbalance y sifrahbalance siempre sean un número
+      // Asegurar que virtualbalance siempre sea un número
       u.virtualbalance = user.virtualbalance != null ? Number(user.virtualbalance) : 0;
-      u.sifrahbalance = user.sifrahbalance != null ? Number(user.sifrahbalance) : 0;
       // `parent` no está en U; sin esto la API nunca envía patrocinador al admin.
       if (user.parent) u.parent = model(user.parent, PARENT_PUBLIC);
       u.planLabel = user.planLabel || resolvePlanDisplayName({ id: user.plan });
