@@ -33,6 +33,36 @@ function buildPeriodLabel(year, month) {
   return `${mName} ${year}`;
 }
 
+function buildPlanNameById(plans) {
+  const map = {};
+  (plans || []).forEach((plan) => {
+    if (plan && plan.id != null) {
+      map[String(plan.id)] = plan.name;
+    }
+  });
+  return map;
+}
+
+/** Usa el nombre actual del catálogo de planes (p. ej. VIP) en lugar del snapshot guardado al afiliar. */
+function withCurrentPlanName(record, planNameById) {
+  if (!record || !record.plan || record.plan.id == null) return record;
+  const currentName = planNameById[String(record.plan.id)];
+  if (!currentName) return record;
+  return {
+    ...record,
+    plan: {
+      ...record.plan,
+      name: currentName,
+    },
+  };
+}
+
+function withCurrentPlanNames(records, planNameById) {
+  return (records || []).map((record) =>
+    withCurrentPlanName(record, planNameById)
+  );
+}
+
 /**
  * Obtiene el periodo abierto actual o crea uno nuevo.
  * 
@@ -96,7 +126,9 @@ export default async (req, res) => {
   const user = await User.findOne({ id: session.id });
 
   // get PLANS
-  let plans = await Plan.find({});
+  const allPlans = await Plan.find({});
+  const planNameById = buildPlanNameById(allPlans);
+  let plans = allPlans;
 
   // get PRODUCTS
   const products = await Product.find({});
@@ -161,9 +193,9 @@ export default async (req, res) => {
 
         plans,
         products,
-        affiliation,
-        affiliations,
-        affiliationHistory,
+        affiliation: withCurrentPlanName(affiliation, planNameById),
+        affiliations: withCurrentPlanNames(affiliations, planNameById),
+        affiliationHistory: withCurrentPlanNames(affiliationHistory, planNameById),
         offices,
 
         balance,
