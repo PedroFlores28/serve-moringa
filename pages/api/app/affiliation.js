@@ -5,6 +5,12 @@ const { User, Session, Plan, Product, Affiliation, Activation, Office, Tree, Tra
   db;
 const { error, success, midd, rand, acum } = lib;
 const { filterAffiliationPlansForUser } = require("../../../lib/affiliationPlans");
+const { getAffiliationPlans } = require("../../../lib/planCatalog");
+const {
+  buildPlanNameById,
+  withResolvedPlanNames,
+  normalizePlanList,
+} = require("../../../lib/planNames");
 
 let tree;
 
@@ -31,36 +37,6 @@ function buildPeriodKey(year, month) {
 function buildPeriodLabel(year, month) {
   const mName = MONTHS_ES[month - 1] || `Mes ${month}`;
   return `${mName} ${year}`;
-}
-
-function buildPlanNameById(plans) {
-  const map = {};
-  (plans || []).forEach((plan) => {
-    if (plan && plan.id != null) {
-      map[String(plan.id)] = plan.name;
-    }
-  });
-  return map;
-}
-
-/** Usa el nombre actual del catálogo de planes (p. ej. VIP) en lugar del snapshot guardado al afiliar. */
-function withCurrentPlanName(record, planNameById) {
-  if (!record || !record.plan || record.plan.id == null) return record;
-  const currentName = planNameById[String(record.plan.id)];
-  if (!currentName) return record;
-  return {
-    ...record,
-    plan: {
-      ...record.plan,
-      name: currentName,
-    },
-  };
-}
-
-function withCurrentPlanNames(records, planNameById) {
-  return (records || []).map((record) =>
-    withCurrentPlanName(record, planNameById)
-  );
 }
 
 /**
@@ -128,7 +104,7 @@ export default async (req, res) => {
   // get PLANS
   const allPlans = await Plan.find({});
   const planNameById = buildPlanNameById(allPlans);
-  let plans = allPlans;
+  let plans = getAffiliationPlans(allPlans);
 
   // get PRODUCTS
   const products = await Product.find({});
@@ -145,6 +121,7 @@ export default async (req, res) => {
   const affiliationHistory = await Affiliation.find({ userId: user.id });
 
   plans = filterAffiliationPlansForUser(plans, user, affiliation, affiliations);
+  plans = normalizePlanList(plans);
 
   // get transactions
   const transactions = await Transaction.find({
@@ -193,9 +170,9 @@ export default async (req, res) => {
 
         plans,
         products,
-        affiliation: withCurrentPlanName(affiliation, planNameById),
-        affiliations: withCurrentPlanNames(affiliations, planNameById),
-        affiliationHistory: withCurrentPlanNames(affiliationHistory, planNameById),
+        affiliation: withResolvedPlanNames([affiliation], planNameById)[0] || affiliation,
+        affiliations: withResolvedPlanNames(affiliations, planNameById),
+        affiliationHistory: withResolvedPlanNames(affiliationHistory, planNameById),
         offices,
 
         balance,

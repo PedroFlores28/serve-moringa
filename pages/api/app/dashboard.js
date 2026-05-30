@@ -5,6 +5,8 @@ const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig, Activat
 const { error, success, acum, midd, model } = lib
 const { computeMonthlyActivity } = require("../../../lib/monthlyActivity")
 const { computeRankCycleProgress } = require("../../../lib/rankCycles")
+const { normalizePlanList } = require("../../../lib/planNames")
+const { getAffiliationPlans } = require("../../../lib/planCatalog")
 
 const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'address', 'rank', 'points', 'parentId', 'total_points']
 export default async (req, res) => {
@@ -20,7 +22,7 @@ export default async (req, res) => {
   if (!session) return res.json(error('invalid session'))
 
   // GET plans
-  const plans = await Plan.find({}); // Traer todos los planes
+  const plans = normalizePlanList(getAffiliationPlans(await Plan.find({})));
 
 
   // get USER

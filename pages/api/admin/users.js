@@ -2,8 +2,17 @@ import bcrypt from "bcrypt";
 import db from "../../../components/db";
 import lib from "../../../components/lib";
 import { requireAdmin } from "../../../components/adminAuth";
+import { resolvePlanDisplayName } from "../../../lib/planNames";
+import {
+  calendarMonthKey,
+  startOfCalendarMonth,
+  endOfCalendarMonth,
+  countProductsInRecord,
+  userIdMatches,
+  recordInMonthScope,
+} from "../../../lib/productTotals";
 
-const { User, Transaction, Closed, Activation, Affiliation } = db;
+const { User, Transaction, Closed, Activation, Affiliation, Period } = db;
 const { error, success, midd, model } = lib;
 
 // valid filters
@@ -36,7 +45,20 @@ const U = [
   "plan",
   "affiliation_points",
   "totalBoughtProducts",
+  "planLabel",
 ];
+
+function resolvePlanLabelForUser(user, latestAffByUserId) {
+  const pid = String(user.plan || "")
+    .trim()
+    .toLowerCase();
+  if (pid && pid !== "none" && pid !== "default" && pid !== "admin") {
+    return resolvePlanDisplayName({ id: user.plan });
+  }
+  const aff = latestAffByUserId.get(String(user.id));
+  if (aff && aff.plan) return resolvePlanDisplayName(aff.plan);
+  return "—";
+}
 
 /** Campos del patrocinador expuestos al admin (evita filtrar `parent` con `model(user, U)`). */
 const PARENT_PUBLIC = ["id", "name", "lastName", "dni"];
@@ -83,7 +105,21 @@ const handler = async (req, res) => {
   if (req.method == "GET") {
     console.log("GET ...");
 
-    const { filter, page = 1, limit = 20, search, showAvailable, showVirtualBalance } = req.query;
+    const q = {
+      all: {},
+      affiliated: { affiliated: true },
+      activated: { activated: true },
+    };
+
+    const {
+      filter: filterParam,
+      page = 1,
+      limit = 20,
+      search,
+      showAvailable,
+      showVirtualBalance,
+    } = req.query;
+    const filter = filterParam && filterParam in q ? filterParam : "all";
     console.log(
       "Received request with page:",
       page,
@@ -99,15 +135,6 @@ const handler = async (req, res) => {
 
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
-
-    const q = {
-      all: {},
-      affiliated: { affiliated: true },
-      activated: { activated: true },
-    };
-
-    // validate filter
-    if (!(filter in q)) return res.json(error("invalid filter"));
 
     // get users
     let allUsers = await User.find(q[filter]);
@@ -258,8 +285,8 @@ const handler = async (req, res) => {
         normalize(user.name).includes(searchNormalized) ||
         normalize(user.lastName).includes(searchNormalized) ||
         normalize(user.dni).includes(searchNormalized) ||
-        normalize(user.country).includes(searchNormalized) ||
         normalize(user.phone).includes(searchNormalized) ||
+        normalize(user.department).includes(searchNormalized) ||
         normalize(user.city).includes(searchNormalized)
       );
     });
@@ -322,49 +349,74 @@ const handler = async (req, res) => {
       return total + (virtualIns - virtualOuts); // Sumar el saldo virtual de cada usuario
     }, 0);
 
-    // Calcular productos comprados este mes para cada usuario en la página
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const monthScope = {
+    start: startOfCalendarMonth(now),
+    end: endOfCalendarMonth(now),
+    periodKeys: [calendarMonthKey(now)],
+  };
+  const openPeriods = await Period.find({ status: "open" });
+  if (openPeriods && openPeriods.length) {
+    openPeriods.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const openKey = openPeriods[0] && openPeriods[0].key;
+    if (openKey && !monthScope.periodKeys.includes(openKey)) {
+      monthScope.periodKeys.push(openKey);
+    }
+  }
 
-    const endOfMonth = new Date();
-    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-    endOfMonth.setDate(0);
-    endOfMonth.setHours(23, 59, 59, 999);
+  const userIdsForProducts = expandIdsForIn(users.map((u) => u.id));
+  const monthDateFilter = { $gte: monthScope.start, $lte: monthScope.end };
+  const monthOrFilter = {
+    $or: [
+      { date: monthDateFilter },
+      { approved_at: monthDateFilter },
+      { period_key: { $in: monthScope.periodKeys } },
+    ],
+  };
 
-    const userIdsForProducts = users.map((u) => u.id);
+  const pageActivations = userIdsForProducts.length
+    ? await Activation.find({
+        userId: { $in: userIdsForProducts },
+        status: "approved",
+        ...monthOrFilter,
+      })
+    : [];
 
-    const pageActivations = await Activation.find({
+  const pageAffiliations = userIdsForProducts.length
+    ? await Affiliation.find({
+        userId: { $in: userIdsForProducts },
+        status: "approved",
+        ...monthOrFilter,
+      })
+    : [];
+
+    const approvedAffiliationsForPlan = await Affiliation.find({
       userId: { $in: userIdsForProducts },
       status: "approved",
-      date: { $gte: startOfMonth, $lte: endOfMonth },
     });
+    const latestAffByUserId = new Map();
+    for (const aff of approvedAffiliationsForPlan) {
+      const uid = String(aff.userId);
+      const prev = latestAffByUserId.get(uid);
+      if (!prev || new Date(aff.date) > new Date(prev.date)) {
+        latestAffByUserId.set(uid, aff);
+      }
+    }
 
-    const pageAffiliations = await Affiliation.find({
-      userId: { $in: userIdsForProducts },
-      status: "approved",
-      date: { $gte: startOfMonth, $lte: endOfMonth },
-    });
-
-    const countItemsProducts = (items) => {
+    function monthProductsForUser(userId) {
       let count = 0;
-      for (const item of items) {
-        if (item.products && Array.isArray(item.products)) {
-          for (const p of item.products) {
-            if (p && typeof p === "object") {
-              if (Array.isArray(p.list)) {
-                for (const subP of p.list) {
-                  count += Number(subP.total) || 0;
-                }
-              } else {
-                count += Number(p.total) || 0;
-              }
-            }
-          }
-        }
+      for (const act of pageActivations) {
+        if (!userIdMatches(act.userId, userId)) continue;
+        if (!recordInMonthScope(act, monthScope)) continue;
+        count += countProductsInRecord(act);
+      }
+      for (const aff of pageAffiliations) {
+        if (!userIdMatches(aff.userId, userId)) continue;
+        if (!recordInMonthScope(aff, monthScope)) continue;
+        count += countProductsInRecord(aff);
       }
       return count;
-    };
+    }
 
     // Calcular el saldo para los usuarios que se están enviando
     users = users.map((user) => {
@@ -392,10 +444,8 @@ const handler = async (req, res) => {
         .reduce((a, b) => a + parseFloat(b.value), 0);
       user.virtualbalance = virtualIns - virtualOuts;
 
-      // Calcular cantidad de productos comprados durante el mes
-      const userAct = pageActivations.filter((a) => a.userId == user.id);
-      const userAff = pageAffiliations.filter((a) => a.userId == user.id);
-      user.totalBoughtProducts = countItemsProducts(userAct) + countItemsProducts(userAff);
+      user.totalBoughtProducts = monthProductsForUser(user.id);
+      user.planLabel = resolvePlanLabelForUser(user, latestAffByUserId);
 
       return user; // Asegúrate de devolver el usuario modificado
     });
@@ -409,6 +459,10 @@ const handler = async (req, res) => {
       u.sifrahbalance = user.sifrahbalance != null ? Number(user.sifrahbalance) : 0;
       // `parent` no está en U; sin esto la API nunca envía patrocinador al admin.
       if (user.parent) u.parent = model(user.parent, PARENT_PUBLIC);
+      u.planLabel = user.planLabel || resolvePlanDisplayName({ id: user.plan });
+      u.department = user.department || user.city || "";
+      u.totalBoughtProducts =
+        user.totalBoughtProducts != null ? Number(user.totalBoughtProducts) : 0;
       return { ...u };
     });
     // Cambia esto para obtener todos los usuarios
@@ -546,9 +600,11 @@ const handler = async (req, res) => {
         _points,
         _rank,
         city,
+        department,
         plan,
         affiliation_points,
       } = req.body.data;
+      const dept = String(department || city || "").trim();
       console.log({
         _name,
         _lastName,
@@ -557,7 +613,7 @@ const handler = async (req, res) => {
         _parent_dni,
         _points,
         _rank,
-        city,
+        department: dept,
         plan,
         affiliation_points,
       });
@@ -579,7 +635,8 @@ const handler = async (req, res) => {
           dni: _dni,
           points: _points,
           rank: _rank,
-          city,
+          department: dept,
+          city: dept,
           plan,
           affiliation_points,
         }
