@@ -26,6 +26,7 @@ export default async (req, res) => {
         holder: method.titular,
         type: method.tipo,
         cci: method.cci || "",
+        qrImage: method.qrImage || "",
         active: method.active
       }))
 
