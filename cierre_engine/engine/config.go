@@ -17,7 +17,7 @@ type Rank struct {
 	Rank              string           `json:"rank"`
 	TypeCalculation   string           `json:"type_calculation"`
 	MinimumFrontals   int              `json:"minimum_frontals"`
-	ThresholdPoints   float64          `json:"threshold_points"`
+	ThresholdPoints   float64          `json:"threshold_points"` // Usado ahora para CANTIDAD DE PRODUCTOS
 	MaximumLargeLeg   float64          `json:"maximum_large_leg"`
 	MaximumOthersLeg  float64          `json:"maximum_others_leg"`
 	ReconsumoRequired float64          `json:"reconsumo_required"`
@@ -27,120 +27,125 @@ type Rank struct {
 var Ranks = []Rank{
 	{
 		Pos:               10,
-		Rank:              "EMBAJADOR SIFRAH",
+		Rank:              "EMBAJADOR CLASS",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   6,
-		ThresholdPoints:   600000,
-		MaximumLargeLeg:   100000,
-		MaximumOthersLeg:  100000,
+		MinimumFrontals:   3,
+		ThresholdPoints:   35000,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 3, DiffBranch: true, RankName: "DIAMANTE CORONA"},
+		},
 	},
 	{
 		Pos:               9,
-		Rank:              "DIAMANTE IMPERIAL",
+		Rank:              "DIAMANTE CORONA",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   6,
-		ThresholdPoints:   300000,
-		MaximumLargeLeg:   55000,
-		MaximumOthersLeg:  55000,
+		MinimumFrontals:   3,
+		ThresholdPoints:   30000,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 3, DiffBranch: true, RankName: "DOBLE DIAMANTE"},
+		},
 	},
 	{
 		Pos:               8,
-		Rank:              "TRIPLE DIAMANTE",
+		Rank:              "DOBLE DIAMANTE",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   5,
-		ThresholdPoints:   170000,
-		MaximumLargeLeg:   37500,
-		MaximumOthersLeg:  37500,
+		MinimumFrontals:   3,
+		ThresholdPoints:   20000,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 3, DiffBranch: true, RankName: "DIAMANTE"},
+		},
 	},
 	{
 		Pos:               7,
-		Rank:              "DOBLE DIAMANTE",
+		Rank:              "DIAMANTE",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   5,
-		ThresholdPoints:   85000,
-		MaximumLargeLeg:   19000,
-		MaximumOthersLeg:  19000,
+		MinimumFrontals:   3,
+		ThresholdPoints:   9000,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 3, DiffBranch: true, RankName: "ESMERALDA"},
+		},
 	},
 	{
 		Pos:               6,
-		Rank:              "DIAMANTE",
+		Rank:              "ESMERALDA",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   4,
-		ThresholdPoints:   45000,
-		MaximumLargeLeg:   12000,
-		MaximumOthersLeg:  12000,
+		MinimumFrontals:   3,
+		ThresholdPoints:   6000,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 3, DiffBranch: true, RankName: "RUBÍ"},
+		},
 	},
 	{
 		Pos:               5,
-		Rank:              "ESMERALDA",
+		Rank:              "RUBÍ",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   4,
-		ThresholdPoints:   20000,
-		MaximumLargeLeg:   5500,
-		MaximumOthersLeg:  5500,
+		MinimumFrontals:   2,
+		ThresholdPoints:   2500,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 2, DiffBranch: true, RankName: "ZAFIRO"},
+		},
 	},
 	{
 		Pos:               4,
-		Rank:              "RUBÍ",
+		Rank:              "ZAFIRO",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   4,
-		ThresholdPoints:   7500,
-		MaximumLargeLeg:   2100,
-		MaximumOthersLeg:  2100,
+		MinimumFrontals:   2,
+		ThresholdPoints:   1500,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 2, DiffBranch: true, RankName: "ORO"},
+		},
 	},
 	{
 		Pos:               3,
 		Rank:              "ORO",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   3,
-		ThresholdPoints:   3500,
-		MaximumLargeLeg:   1350,
-		MaximumOthersLeg:  1350,
+		MinimumFrontals:   2,
+		ThresholdPoints:   700,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
+		RankDependencies: []RankDependency{
+			{Minimum: 2, DiffBranch: true, RankName: "PLATA"},
+		},
 	},
 	{
 		Pos:               2,
 		Rank:              "PLATA",
 		TypeCalculation:   "simple",
-		MinimumFrontals:   3,
-		ThresholdPoints:   1500,
-		MaximumLargeLeg:   600,
-		MaximumOthersLeg:  600,
+		MinimumFrontals:   0,
+		ThresholdPoints:   350,
+		MaximumLargeLeg:   0,
+		MaximumOthersLeg:  0,
 		ReconsumoRequired: 160,
 		RankDependencies:  []RankDependency{},
 	},
 	{
 		Pos:               1,
-		Rank:              "BRONCE",
-		TypeCalculation:   "simple",
-		MinimumFrontals:   2,
-		ThresholdPoints:   500,
-		MaximumLargeLeg:   300,
-		MaximumOthersLeg:  300,
-		ReconsumoRequired: 160,
-		RankDependencies:  []RankDependency{},
-	},
-	{
-		Pos:               0,
 		Rank:              "ACTIVO",
 		TypeCalculation:   "simple",
 		MinimumFrontals:   0,
-		ThresholdPoints:   1,
+		ThresholdPoints:   1, // o 0, asume 1 producto minimo para ser Activo
 		MaximumLargeLeg:   0,
 		MaximumOthersLeg:  0,
 		ReconsumoRequired: 120,
@@ -148,23 +153,21 @@ var Ranks = []Rank{
 	},
 }
 
-// ResidualPercentagesByRank — Bono regalías (N1–N9 como fracción 1.0 = 100%).
-// Alineado con tabla oficial SIFRAH: ACTIVO 2 niveles; BRONCE 4 (último 5%); PLATA 5; ORO 6;
-// RUBÍ 7; ESMERALDA/DIAMANTE/DOBLE/TRIPLE/IMPERIAL 9; tope = EMBAJADOR SIFRAH (tabla “DIAMANTE CORONA”, N9 5%).
+// ResidualPercentagesByRank — Bono regalías a 8 niveles fijos para todos.
 var ResidualPercentagesByRank = map[string][]float64{
-	"ACTIVO":           {0.15, 0.15, 0, 0, 0, 0, 0, 0, 0},
-	"BRONCE":           {0.15, 0.15, 0.15, 0.05, 0, 0, 0, 0, 0},
-	"PLATA":            {0.15, 0.15, 0.15, 0.10, 0.05, 0, 0, 0, 0},
-	"ORO":              {0.15, 0.15, 0.15, 0.15, 0.05, 0.05, 0, 0, 0},
-	"RUBÍ":             {0.15, 0.15, 0.15, 0.15, 0.10, 0.05, 0.025, 0, 0},
-	"ESMERALDA":        {0.15, 0.15, 0.15, 0.15, 0.10, 0.05, 0.025, 0.025, 0.01},
-	"DIAMANTE":         {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.025, 0.025, 0.01},
-	"DOBLE DIAMANTE":   {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.025, 0.01},
-	"TRIPLE DIAMANTE":  {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.025, 0.025},
-	"DIAMANTE IMPERIAL": {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05, 0.025},
-	"EMBAJADOR SIFRAH": {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05, 0.05},
-	// Mismo plan que EMBAJADOR SIFRAH (nombre en material comercial “DIAMANTE CORONA”).
-	"DIAMANTE CORONA": {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05, 0.05},
+	"ACTIVO":           {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"BRONCE":           {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05}, // Legacy support
+	"PLATA":            {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"ORO":              {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"ZAFIRO":           {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"RUBÍ":             {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"ESMERALDA":        {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"DIAMANTE":         {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"DOBLE DIAMANTE":   {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"TRIPLE DIAMANTE":  {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05}, // Legacy support
+	"DIAMANTE IMPERIAL": {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05}, // Legacy support
+	"DIAMANTE CORONA":  {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
+	"EMBAJADOR CLASS":  {0.15, 0.15, 0.15, 0.15, 0.10, 0.075, 0.05, 0.05},
 }
 
 type GenerationalConfig struct {
@@ -175,45 +178,45 @@ type GenerationalConfig struct {
 
 // Generational percentages by rank (G1, G2, etc.) for the VIP Generational Bonus.
 var GenerationalBonusByRank = map[string]GenerationalConfig{
-	"PLATA":             {CutOffRankPos: 1, MaxGenerations: 2, Percentages: []float64{0.02, 0.01}}, 
-	"ORO":               {CutOffRankPos: 2, MaxGenerations: 3, Percentages: []float64{0.02, 0.02, 0.01}}, 
-	"RUBÍ":              {CutOffRankPos: 3, MaxGenerations: 4, Percentages: []float64{0.02, 0.02, 0.02, 0.01}}, 
-	"ESMERALDA":         {CutOffRankPos: 4, MaxGenerations: 5, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01}}, 
-	"DIAMANTE":          {CutOffRankPos: 5, MaxGenerations: 5, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01}}, 
-	"DOBLE DIAMANTE":    {CutOffRankPos: 6, MaxGenerations: 6, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01, 0.01}}, 
-	"TRIPLE DIAMANTE":   {CutOffRankPos: 7, MaxGenerations: 6, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01, 0.01}}, 
-	"DIAMANTE IMPERIAL": {CutOffRankPos: 8, MaxGenerations: 7, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01}}, 
-	"EMBAJADOR SIFRAH":  {CutOffRankPos: 9, MaxGenerations: 7, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01}}, 
+	"PLATA":             {CutOffRankPos: 2, MaxGenerations: 2, Percentages: []float64{0.02, 0.01}}, 
+	"ORO":               {CutOffRankPos: 3, MaxGenerations: 3, Percentages: []float64{0.02, 0.02, 0.01}}, 
+	"ZAFIRO":            {CutOffRankPos: 4, MaxGenerations: 4, Percentages: []float64{0.02, 0.02, 0.02, 0.01}}, 
+	"RUBÍ":              {CutOffRankPos: 5, MaxGenerations: 4, Percentages: []float64{0.02, 0.02, 0.02, 0.01}}, 
+	"ESMERALDA":         {CutOffRankPos: 6, MaxGenerations: 5, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01}}, 
+	"DIAMANTE":          {CutOffRankPos: 7, MaxGenerations: 5, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01}}, 
+	"DOBLE DIAMANTE":    {CutOffRankPos: 8, MaxGenerations: 6, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01, 0.01}}, 
 	"DIAMANTE CORONA":   {CutOffRankPos: 9, MaxGenerations: 7, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01}}, 
+	"EMBAJADOR CLASS":   {CutOffRankPos: 10, MaxGenerations: 7, Percentages: []float64{0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01}}, 
 }
 
 var MaxDepthByRank = map[string]int{
 	"none":              0,
-	"ACTIVO":            2,
-	"BRONCE":            4, // exactamente 4 niveles (alineado con los 4 % > 0 en ResidualPercentagesByRank)
-	"PLATA":             5,
-	"ORO":               6,
-	"RUBÍ":              7,
-	"ESMERALDA":         9,
-	"DIAMANTE":          9,
-	"DOBLE DIAMANTE":    9,
-	"TRIPLE DIAMANTE":   9,
-	"DIAMANTE IMPERIAL": 9,
-	"EMBAJADOR SIFRAH":  9,
-	"DIAMANTE CORONA":   9,
+	"ACTIVO":            8,
+	"BRONCE":            8,
+	"PLATA":             8,
+	"ORO":               8,
+	"ZAFIRO":            8,
+	"RUBÍ":              8,
+	"ESMERALDA":         8,
+	"DIAMANTE":          8,
+	"DOBLE DIAMANTE":    8,
+	"TRIPLE DIAMANTE":   8,
+	"DIAMANTE IMPERIAL": 8,
+	"DIAMANTE CORONA":   8,
+	"EMBAJADOR CLASS":   8,
 }
 
 var RankAchievementBonuses = []models.Pay{
 	{Name: "BRONCE", Value: 60},
 	{Name: "PLATA", Value: 300},
 	{Name: "ORO", Value: 600},
+	{Name: "ZAFIRO", Value: 900}, // Interpolated
 	{Name: "RUBÍ", Value: 1200},
 	{Name: "ESMERALDA", Value: 2500},
 	{Name: "DIAMANTE", Value: 5000},
 	{Name: "DOBLE DIAMANTE", Value: 10000},
-	{Name: "TRIPLE DIAMANTE", Value: 20000},
-	{Name: "DIAMANTE IMPERIAL", Value: 40000},
-	{Name: "EMBAJADOR SIFRAH", Value: 80000},
+	{Name: "DIAMANTE CORONA", Value: 20000}, // Adjusted
+	{Name: "EMBAJADOR CLASS", Value: 40000}, // Adjusted
 }
 
 const (
@@ -230,9 +233,8 @@ func NormalizeRankKeyForResidual(rank string) string {
 	if strings.EqualFold(r, "RUBI") {
 		return "RUBÍ"
 	}
-	// Tabla comercial “DIAMANTE CORONA” = mismo residual que EMBAJADOR SIFRAH en motor.
-	if strings.EqualFold(r, "DIAMANTE CORONA") {
-		return "DIAMANTE CORONA"
+	if strings.EqualFold(r, "EMBAJADOR SIFRAH") {
+		return "EMBAJADOR CLASS"
 	}
 	if _, ok := MaxDepthByRank[r]; ok {
 		return r
@@ -260,14 +262,9 @@ func GetRankPos(rank string) int {
 			return r.Pos
 		}
 	}
-	if norm == "DIAMANTE CORONA" {
-		return 10
-	}
 	return 0
 }
 
-// ResidualMaxDepth niveles máximos de pago residual: el menor entre el tope del rango y los niveles con % > 0.
-// BRONCE: 4 niveles (15%, 15%, 15%, 5%); no puede exceder aunque un mapa esté desalineado.
 func ResidualMaxDepth(rank string) int {
 	key := NormalizeRankKeyForResidual(rank)
 	if key == "" {
@@ -295,4 +292,3 @@ func ResidualMaxDepth(rank string) int {
 	}
 	return lastPay
 }
- 

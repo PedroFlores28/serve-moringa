@@ -8,10 +8,12 @@ import (
 )
 
 type CierreEngine struct {
-	Users      map[string]*models.User
-	TreeNodes  map[string]*models.TreeNode
-	MemoPoints map[string]float64
-	Logger     *CierreLogger
+	Users        map[string]*models.User
+	TreeNodes    map[string]*models.TreeNode
+	MemoPoints   map[string]float64
+	MemoProducts map[string]float64
+	MemoRanks    map[string]string
+	Logger       *CierreLogger
 }
 
 func NewCierreEngine(users []models.User, treeNodes []models.TreeNode, logger *CierreLogger) *CierreEngine {
@@ -29,10 +31,12 @@ func NewCierreEngine(users []models.User, treeNodes []models.TreeNode, logger *C
 	}
 
 	return &CierreEngine{
-		Users:      userMap,
-		TreeNodes:  treeMap,
-		MemoPoints: make(map[string]float64),
-		Logger:     logger,
+		Users:        userMap,
+		TreeNodes:    treeMap,
+		MemoPoints:   make(map[string]float64),
+		MemoProducts: make(map[string]float64),
+		MemoRanks:    make(map[string]string),
+		Logger:       logger,
 	}
 }
 
@@ -76,21 +80,100 @@ func (e *CierreEngine) GetActiveLines(id string) int {
 	return count
 }
 
+func (e *CierreEngine) CalculateTotalProducts(id string) float64 {
+	if val, ok := e.MemoProducts[id]; ok {
+		return val
+	}
+
+	user, ok := e.Users[id]
+	if !ok {
+		return 0
+	}
+
+	total := user.PersonalProductCount
+
+	treeNode, ok := e.TreeNodes[id]
+	if ok {
+		for _, childID := range treeNode.Childs {
+			total += e.CalculateTotalProducts(childID)
+		}
+	}
+
+	e.MemoProducts[id] = total
+	return total
+}
+
+func (e *CierreEngine) HasRankInDownline(nodeID string, rankTarget string) bool {
+	nodeRank := e.MemoRanks[nodeID]
+	if nodeRank == rankTarget {
+		return true
+	}
+	
+	targetPos := GetRankPos(rankTarget)
+	if GetRankPos(nodeRank) >= targetPos {
+		return true
+	}
+
+	treeNode, ok := e.TreeNodes[nodeID]
+	if ok {
+		for _, childID := range treeNode.Childs {
+			if e.HasRankInDownline(childID, rankTarget) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (e *CierreEngine) CheckDependencies(id string, deps []RankDependency) bool {
+	if len(deps) == 0 {
+		return true
+	}
+	
+	treeNode, ok := e.TreeNodes[id]
+	if !ok {
+		return false
+	}
+
+	for _, dep := range deps {
+		count := 0
+		for _, childID := range treeNode.Childs {
+			if e.HasRankInDownline(childID, dep.RankName) {
+				count++
+			}
+		}
+		if count < dep.Minimum {
+			return false
+		}
+	}
+	return true
+}
+
 func (e *CierreEngine) CalculateRank(id string) string {
+	if rank, ok := e.MemoRanks[id]; ok {
+		return rank
+	}
+
 	user, ok := e.Users[id]
 	if !ok || !user.Activated {
+		e.MemoRanks[id] = "none"
 		return "none"
 	}
 
 	treeNode, ok := e.TreeNodes[id]
 	if !ok {
+		e.MemoRanks[id] = "ACTIVO"
 		return "ACTIVO"
 	}
 
-	// Prepare legs for VMP calculation
+	// Bottom-up recursion
+	for _, childID := range treeNode.Childs {
+		e.CalculateRank(childID)
+	}
+
 	var legs []float64
 	for _, childID := range treeNode.Childs {
-		p := e.CalculateTotalPoints(childID)
+		p := e.CalculateTotalProducts(childID)
 		if p > 0 {
 			legs = append(legs, p)
 		}
@@ -100,33 +183,32 @@ func (e *CierreEngine) CalculateRank(id string) string {
 	})
 
 	if e.Logger != nil {
-		e.Logger.LogRank("DEBUG PUNTOS - %s %s : total_points (RAW)=%.2f, piernas=%v", user.Name, user.LastName, user.Points+user.AffiliationPoints, legs)
+		e.Logger.LogRank("DEBUG PRODS - %s %s : total_prods (RAW)=%.2f, piernas=%v", user.Name, user.LastName, e.CalculateTotalProducts(id), legs)
 	}
 
 	activeLines := len(legs)
-	reconsumo := math.Max(user.Points, user.AffiliationPoints) // As seen in js: Math.max(Number(user.points), Number(user.affiliation_points))
+	reconsumo := math.Max(user.Points, user.AffiliationPoints)
 
-	// Evaluate ranks from highest to lowest
 	for _, r := range Ranks {
 		if r.TypeCalculation != "simple" {
 			continue
 		}
 
-		// 1. Check Reconsumo
 		if reconsumo < r.ReconsumoRequired {
 			continue
 		}
 
-		// 2. Check Active Lines
 		if activeLines < r.MinimumFrontals {
 			continue
 		}
 
-		// 3. Truncate legs with VMP
-		totalWithVMP := 0.0
-		puntosPersonales := user.Points + user.AffiliationPoints
+		if !e.CheckDependencies(id, r.RankDependencies) {
+			continue
+		}
 
-		// Work with a copy of legs
+		totalWithVMP := 0.0
+		puntosPersonales := user.PersonalProductCount
+
 		calcLegs := make([]float64, len(legs))
 		copy(calcLegs, legs)
 
@@ -152,14 +234,15 @@ func (e *CierreEngine) CalculateRank(id string) string {
 
 		if totalWithVMP >= r.ThresholdPoints {
 			if e.Logger != nil {
-				e.Logger.LogRank(" ✅ RANGO ALCANZADO: %s para %s %s (Points with VMP: %.2f)", r.Rank, user.Name, user.LastName, totalWithVMP)
+				e.Logger.LogRank(" ✅ RANGO ALCANZADO: %s para %s %s (Productos con VMP: %.2f)", r.Rank, user.Name, user.LastName, totalWithVMP)
 			}
-			// Update user total points for DB save
-			user.TotalPoints = totalWithVMP
+			user.TotalProductCount = totalWithVMP
+			e.MemoRanks[id] = r.Rank
 			return r.Rank
 		}
 	}
 
+	e.MemoRanks[id] = "ACTIVO"
 	return "ACTIVO"
 }
 
@@ -212,12 +295,9 @@ func (e *CierreEngine) CalculateResidualBonus(id string, closedRank string) ([]m
 
 			pr := EffectiveResidualBase(child)
 
-			// Compresión dinámica: solo se incrementa el nivel si el hijo tiene base residual > 0.
-			// Si PR = 0, el nodo se salta y sus hijos heredan el nivel actual.
-			nextLevel := currentLevel
-			if pr > 0 {
-				nextLevel = currentLevel + 1
-			}
+			// Sin compresión dinámica: se incrementa el nivel en cada salto del árbol
+			// independientemente de si el usuario compró o no (profundidad real estricta).
+			nextLevel := currentLevel + 1
 
 			// Respetar tope del rango (p. ej. BRONCE = 4 niveles).
 			if nextLevel > maxDepth {

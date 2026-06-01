@@ -153,6 +153,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	affiliations, err := m.GetApprovedAffiliationsForClosure(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
 	virtualTxs, err := m.GetVirtualTransactions(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -218,7 +222,7 @@ func main() {
 	}
 
 	ce := engine.NewCierreEngine(users, treeNodes, cl)
-	ce.ApplyResidualVolumes(products, activations)
+	ce.ApplyResidualVolumes(products, activations, affiliations)
 	for i := range users {
 		_ = ce.CalculateTotalPoints(users[i].ID)
 	}

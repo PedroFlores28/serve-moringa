@@ -150,6 +150,47 @@ func (db *MongoDB) GetApprovedActivationsForClosure(ctx context.Context) ([]mode
 	return activations, nil
 }
 
+// GetApprovedAffiliationsForClosure — afiliaciones del periodo en curso.
+func (db *MongoDB) GetApprovedAffiliationsForClosure(ctx context.Context) ([]models.Affiliation, error) {
+	openKeys, err := db.GetOpenPeriodKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := bson.M{"status": "approved"}
+	if len(openKeys) > 0 {
+		or := []bson.M{{"period_key": bson.M{"$in": openKeys}}}
+		if lastClosed, ok := db.GetLastClosedAt(ctx); ok {
+			or = append(or, bson.M{
+				"$and": []bson.M{
+					{"$or": []bson.M{
+						{"period_key": bson.M{"$exists": false}},
+						{"period_key": nil},
+						{"period_key": ""},
+					}},
+					{"date": bson.M{"$gte": lastClosed}},
+				},
+			})
+		}
+		filter["$or"] = or
+	} else if lastClosed, ok := db.GetLastClosedAt(ctx); ok {
+		filter["date"] = bson.M{"$gte": lastClosed}
+	}
+
+	cursor, err := db.DB.Collection("affiliations").Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var affiliations []models.Affiliation
+	if err := cursor.All(ctx, &affiliations); err != nil {
+		return nil, err
+	}
+
+	return affiliations, nil
+}
+
 func (db *MongoDB) GetTree(ctx context.Context) ([]models.TreeNode, error) {
 	cursor, err := db.DB.Collection("tree").Find(ctx, bson.M{})
 	if err != nil {

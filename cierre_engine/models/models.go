@@ -13,21 +13,23 @@ type Pay struct {
 }
 
 type User struct {
-	ID                string    `bson:"id" json:"id"`
-	DNI               string    `bson:"dni" json:"dni"`
-	Name              string    `bson:"name" json:"name"`
-	LastName          string    `bson:"lastName" json:"lastName"`
-	ParentID          string    `bson:"parentId" json:"parentId"`
-	Plan              string    `bson:"plan" json:"plan"`
-	Points            float64   `bson:"points" json:"points"`
-	AffiliationPoints float64   `bson:"affiliation_points" json:"affiliation_points"`
-	Activated         bool      `bson:"activated" json:"activated"`
-	Rank              string    `bson:"rank" json:"rank"`
-	TotalPoints       float64   `bson:"total_points" json:"total_points"`
-	Pays              []Pay     `bson:"pays" json:"pays"`
-	Affiliated        bool      `bson:"affiliated" json:"affiliated"`
-	ActivatedInternal bool      `bson:"_activated" json:"_activated"`
-	AffiliationDate   time.Time `bson:"affiliation_date" json:"affiliation_date"`
+	ID                   string    `bson:"id" json:"id"`
+	DNI                  string    `bson:"dni" json:"dni"`
+	Name                 string    `bson:"name" json:"name"`
+	LastName             string    `bson:"lastName" json:"lastName"`
+	ParentID             string    `bson:"parentId" json:"parentId"`
+	Plan                 string    `bson:"plan" json:"plan"`
+	Points               float64   `bson:"points" json:"points"`
+	AffiliationPoints    float64   `bson:"affiliation_points" json:"affiliation_points"`
+	PersonalProductCount float64   `bson:"-" json:"-"`
+	TotalProductCount    float64   `bson:"-" json:"-"`
+	Activated            bool      `bson:"activated" json:"activated"`
+	Rank                 string    `bson:"rank" json:"rank"`
+	TotalPoints          float64   `bson:"total_points" json:"total_points"`
+	Pays                 []Pay     `bson:"pays" json:"pays"`
+	Affiliated           bool      `bson:"affiliated" json:"affiliated"`
+	ActivatedInternal    bool      `bson:"_activated" json:"_activated"`
+	AffiliationDate      time.Time `bson:"affiliation_date" json:"affiliation_date"`
 	// ResidualVolume — suma (cantidad × ganancia residual Bs) del periodo; motor de cierre.
 	ResidualVolume    float64   `bson:"-" json:"-"`
 	// Computed fields (not persisted directly, used for history entry)

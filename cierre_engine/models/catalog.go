@@ -21,3 +21,10 @@ type Activation struct {
 	Status   string           `bson:"status" json:"status"`
 	Products []ActivationLine `bson:"products" json:"products"`
 }
+
+// Affiliation — afiliación aprobada.
+type Affiliation struct {
+	UserID   string           `bson:"userId" json:"userId"`
+	Status   string           `bson:"status" json:"status"`
+	Products []ActivationLine `bson:"products" json:"products"`
+}

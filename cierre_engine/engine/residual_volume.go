@@ -5,8 +5,8 @@ import (
 )
 
 // ApplyResidualVolumes agrega por usuario la base en Bs para residuales:
-// Σ (cantidad × ganancia_residual del producto) en activaciones aprobadas.
-func (e *CierreEngine) ApplyResidualVolumes(products []models.Product, activations []models.Activation) {
+// Σ (cantidad × ganancia_residual del producto) en activaciones y afiliaciones aprobadas.
+func (e *CierreEngine) ApplyResidualVolumes(products []models.Product, activations []models.Activation, affiliations []models.Affiliation) {
 	byID := make(map[string]float64)
 	byCode := make(map[string]float64)
 	for _, p := range products {
@@ -48,6 +48,31 @@ func (e *CierreEngine) ApplyResidualVolumes(products []models.Product, activatio
 			if qty <= 0 {
 				continue
 			}
+			u.PersonalProductCount += qty
+			
+			profit := lineProfit(line)
+			if profit <= 0 {
+				continue
+			}
+			u.ResidualVolume += qty * profit
+		}
+	}
+
+	for _, aff := range affiliations {
+		if aff.Status != "" && aff.Status != "approved" {
+			continue
+		}
+		u, ok := e.Users[aff.UserID]
+		if !ok {
+			continue
+		}
+		for _, line := range aff.Products {
+			qty := line.Total
+			if qty <= 0 {
+				continue
+			}
+			u.PersonalProductCount += qty
+			
 			profit := lineProfit(line)
 			if profit <= 0 {
 				continue
