@@ -128,7 +128,7 @@ export default async (req, res) => {
   collectIds(user.id)
   const activationUserIds = [user.id, ...networkIds]
 
-  const [networkActivations, userAffiliations] = await Promise.all([
+  const [networkActivations, networkAffiliations] = await Promise.all([
     Activation.find({
       userId: { $in: activationUserIds },
       status: "approved",
@@ -137,13 +137,20 @@ export default async (req, res) => {
         { approved_at: { $gte: monthStart } },
       ],
     }),
-    Affiliation.find({ userId: user.id, status: "approved" }),
+    Affiliation.find({
+      userId: { $in: activationUserIds },
+      status: "approved",
+      $or: [
+        { date: { $gte: monthStart } },
+        { approved_at: { $gte: monthStart } },
+      ],
+    }),
   ])
 
   monthlyActivity = computeMonthlyActivity(
     user,
     allTree,
-    userAffiliations,
+    networkAffiliations,
     networkActivations
   )
 
