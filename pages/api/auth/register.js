@@ -103,6 +103,16 @@ const Register = async (req, res) => {
   const _id = parent.coverage?.id || parent.id
   let node = await Tree.findOne({ id: _id })
 
+  // Si el padre no tiene nodo en el árbol, crearlo automáticamente
+  if (!node) {
+    await Tree.insert({ id: _id, childs: [], parent: null })
+    node = { id: _id, childs: [], parent: null }
+  }
+
+  if (!Array.isArray(node.childs)) {
+    node.childs = []
+  }
+
   node.childs.push(id)
 
   await Tree.update({ id: _id }, { childs: node.childs })
