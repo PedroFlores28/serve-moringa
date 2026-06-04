@@ -3,8 +3,9 @@ const cors = require('micro-cors')()
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Affiliation, Tree } = db
+const { User, Session, Affiliation, Tree, Activation } = db
 const { error, success, _ids, _map, model } = lib
+const { computeMonthlyActivity } = require("../../../lib/monthlyActivity")
 
 // models
 // const D = ['id', 'name', 'lastName', 'email', 'phone', 'affiliated', 'activated', 'affiliationDate']
@@ -22,6 +23,30 @@ const directs = async (req, res) => {
   // get USER
   const user = await User.findOne({ id: session.id })
 
+  const allTree = await Tree.find({})
+
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  monthStart.setHours(0, 0, 0, 0)
+
+  // Get all approved activations and affiliations for the current month
+  const [allActivations, allAffiliations] = await Promise.all([
+    Activation.find({
+      status: "approved",
+      $or: [
+        { date: { $gte: monthStart } },
+        { approved_at: { $gte: monthStart } },
+      ],
+    }),
+    Affiliation.find({
+      status: "approved",
+      $or: [
+        { date: { $gte: monthStart } },
+        { approved_at: { $gte: monthStart } },
+      ],
+    }),
+  ])
+
   // find directs
   let directs = await User.find({ parentId: user.id })
 
@@ -30,13 +55,16 @@ const directs = async (req, res) => {
     // Asegurar que points siempre sea un número (puntos personales)
     // Obtener points del modelo o directamente del objeto original
     d.points = Number(d.points !== undefined ? d.points : direct.points) || 0
+    const activity = computeMonthlyActivity(direct, allTree, allAffiliations, allActivations)
+    d.personalProductCount = activity.personalProductCount || 0
+    d.groupProductCount = activity.groupProductCount || 0
     return { ...d }
   })
 
   const node = await Tree.findOne({ id: user.id })
   console.log({ node })
 
-  const childs = node.childs
+  const childs = node ? node.childs : []
   console.log({ childs })
 
   let frontals = await User.find({ id: { $in: childs } })
@@ -48,6 +76,9 @@ const directs = async (req, res) => {
     // Asegurar que points siempre sea un número (puntos personales)
     // Obtener points del modelo o directamente del objeto original
     d.points = Number(d.points !== undefined ? d.points : frontal.points) || 0
+    const activity = computeMonthlyActivity(frontal, allTree, allAffiliations, allActivations)
+    d.personalProductCount = activity.personalProductCount || 0
+    d.groupProductCount = activity.groupProductCount || 0
     return { ...d }
   })
 
