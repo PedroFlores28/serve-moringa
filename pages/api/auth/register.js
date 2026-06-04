@@ -4,11 +4,18 @@ import lib    from "../../../components/lib"
 
 const { User, Session, Token, Tree } = db
 const { rand, error, success, midd } = lib
+const { getDefaultPhotoByGender } = require('../../../lib/defaultAvatars')
 
 
 const Register = async (req, res) => {
 
-  let { country, dni, name, lastName, date, email, password, phone, code, department, province, district } = req.body
+  let { country, dni, name, lastName, date, email, password, phone, code, department, province, district, gender } = req.body
+
+  const allowedGenders = ['masculino', 'femenino', 'otro']
+  const genderNorm = gender != null ? String(gender).trim().toLowerCase() : ''
+  if (!genderNorm || !allowedGenders.includes(genderNorm)) {
+    return res.json(error('gender required'))
+  }
 
   // Validar que el código existe y no esté vacío
   if (!code || code.trim() === '') {
@@ -64,6 +71,8 @@ const Register = async (req, res) => {
   }
 
 
+  const defaultPhoto = getDefaultPhotoByGender(genderNorm)
+
   await User.insert({
     id,
     date: new Date(),
@@ -76,6 +85,7 @@ const Register = async (req, res) => {
     password,
     phone,
     department,
+    gender: genderNorm,
     province,
     district,
     parentId:   parent.id,
@@ -83,7 +93,7 @@ const Register = async (req, res) => {
     _activated:  false,
     activated:  false,
     plan:      'default',
-    photo:     'https://ik.imagekit.io/asu/impulse/avatar_cWVgh_GNP.png',
+    photo:     defaultPhoto,
     points: 0,
     // tree: false,
     tree: true,
@@ -122,7 +132,8 @@ const Register = async (req, res) => {
   // response
   return res.json(success({ 
     session,
-    affiliated: false  // El usuario recién registrado aún no está afiliado
+    affiliated: false,
+    photo: defaultPhoto,
   }))
 }
 
