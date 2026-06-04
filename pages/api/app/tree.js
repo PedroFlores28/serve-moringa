@@ -1,8 +1,14 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Tree, Activation, Closed } = db
+const { User, Session, Tree, Activation, Affiliation, Closed } = db
 const { error, success, midd, map } = lib
+const { collectNetworkUserIds } = require("../../../lib/monthlyActivity")
+const {
+  fetchMonthRecordsForUsers,
+  buildVolumeMap,
+  volumesForUser,
+} = require("../../../lib/treeVolumes")
 
 let tree, nodes
 
@@ -254,8 +260,31 @@ export default async (req, res) => {
     if (dni && rnk) lastClosedRankByDni.set(String(dni), rnk)
   }
 
-  // Leer el total_points ya almacenado
-  const total_points = nodeUser.total_points || 0
+  const allTree = await Tree.find({})
+  const childIds =
+    node.childs && node.childs.length ? [...node.childs] : []
+  const usersForVolumes = [nodeUser]
+  let childUsersOrdered = []
+  if (childIds.length) {
+    const childUsers = await User.find({ id: { $in: childIds } })
+    childUsersOrdered = childIds.map((cid) =>
+      childUsers.find((u) => u.id === cid)
+    )
+    usersForVolumes.push(...childUsersOrdered.filter(Boolean))
+  }
+  const networkUserIds = collectNetworkUserIds(nodeUser.id, allTree)
+  const { activations, affiliations } = await fetchMonthRecordsForUsers(
+    Activation,
+    Affiliation,
+    networkUserIds
+  )
+  const volumeMap = buildVolumeMap(
+    usersForVolumes,
+    allTree,
+    activations,
+    affiliations
+  )
+  const nodeVolumes = volumesForUser(volumeMap, nodeUser.id)
 
   // Traer los hijos inmediatos
   let children = []
@@ -263,14 +292,14 @@ export default async (req, res) => {
   if (node.childs && node.childs.length > 0) {
     // Buscar los nodos hijos
     const childNodes = await Tree.find({ id: { $in: node.childs } })
-    // Traer los usuarios de los hijos
-    const childUsers = await User.find({ id: { $in: node.childs } })
-    // Ordenar childNodes y childUsers según el orden de node.childs
-    const childNodesOrdered = node.childs.map(cid => childNodes.find(n => n.id === cid))
-    const childUsersOrdered = node.childs.map(cid => childUsers.find(u => u.id === cid))
-    // Mapear hijos con datos de usuario
+    const childNodesOrdered = node.childs.map((cid) =>
+      childNodes.find((n) => n.id === cid)
+    )
     children = childNodesOrdered.map((childNode, idx) => {
       const childUser = childUsersOrdered[idx] || {}
+      const childVol = childUser.id
+        ? volumesForUser(volumeMap, childUser.id)
+        : { personalProductCount: 0, groupProductCount: 0 }
       const closedRank =
         childUser && childUser.id
           ? lastClosedRankByUserId.get(String(childUser.id))
@@ -286,7 +315,10 @@ export default async (req, res) => {
         lastName: childUser.lastName,
         affiliated: childUser.affiliated,
         activated: childUser.activated,
-        points: Number(childUser.points) || 0,
+        points: childVol.personalProductCount,
+        personalProductCount: childVol.personalProductCount,
+        total_points: childVol.groupProductCount,
+        groupProductCount: childVol.groupProductCount,
         affiliation_points: childUser.affiliation_points || 0,
         photo: childUser.photo,
         country: childUser.country,
@@ -299,11 +331,12 @@ export default async (req, res) => {
         rank: closedRank || closedRankByDni || childUser.rank,
       }
     })
-    // Calcular los puntos grupales de cada hijo directo en el mismo orden
-    children_points = childUsersOrdered.map(childUser => childUser && childUser.total_points || 0)
+    children_points = childUsersOrdered.map((childUser) => {
+      if (!childUser || !childUser.id) return 0
+      return volumesForUser(volumeMap, childUser.id).groupProductCount
+    })
   }
 
-  // Nodo principal con datos de usuario
   const mainNode = {
     id: node.id,
     childs: node.childs,
@@ -311,7 +344,8 @@ export default async (req, res) => {
     lastName: nodeUser.lastName,
     affiliated: nodeUser.affiliated,
     activated: nodeUser.activated,
-    points: Number(nodeUser.points) || 0,
+    points: nodeVolumes.personalProductCount,
+    personalProductCount: nodeVolumes.personalProductCount,
     affiliation_points: nodeUser.affiliation_points || 0,
     photo: nodeUser.photo,
     country: nodeUser.country,
@@ -326,7 +360,8 @@ export default async (req, res) => {
       lastClosedRankByUserId.get(String(nodeUser.id)) ||
       lastClosedRankByDni.get(String(nodeUser.dni)) ||
       nodeUser.rank,
-    total_points,
+    total_points: nodeVolumes.groupProductCount,
+    groupProductCount: nodeVolumes.groupProductCount,
   }
 
   return res.json(success({

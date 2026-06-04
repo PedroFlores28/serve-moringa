@@ -1,10 +1,15 @@
 import db from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Tree, Closed } = db
+const { User, Session, Tree, Activation, Affiliation, Closed } = db
 const { error, success, midd } = lib
+const {
+  fetchMonthRecordsForUsers,
+  buildVolumeMap,
+  volumesForUser,
+} = require("../../../lib/treeVolumes")
 
-let tree, users
+let tree, users, volumeByUserId
 
 async function fetchLastClosed() {
   const all = await Closed.find({})
@@ -63,7 +68,11 @@ function find(id, n) {
         _node.lastName = user.lastName
         _node.affiliated = user.affiliated
         _node.activated = user.activated
-        _node.points = Number(user.points) || 0
+        const vol = volumesForUser(volumeByUserId, user.id)
+        _node.points = vol.personalProductCount
+        _node.personalProductCount = vol.personalProductCount
+        _node.total_points = vol.groupProductCount
+        _node.groupProductCount = vol.groupProductCount
         _node.affiliation_points = user.affiliation_points || 0
         _node.photo = user.photo
         _node.country = user.country
@@ -76,7 +85,6 @@ function find(id, n) {
           : null
         _node._rank = closedRank || closedRankByDni || user.rank
         _node.rank = closedRank || closedRankByDni || user.rank
-        _node.total_points = user.total_points || 0
       }
       node._childs.push(_node)
     }
@@ -123,18 +131,28 @@ export default async (req, res) => {
       if (dni && rnk) lastClosedRankByDni.set(String(dni), rnk)
     }
 
-    // Encontrar el nodo raíz
+    const userIds = users.map((u) => u.id).filter(Boolean)
+    const { activations, affiliations } = await fetchMonthRecordsForUsers(
+      Activation,
+      Affiliation,
+      userIds
+    )
+    volumeByUserId = buildVolumeMap(users, tree, activations, affiliations)
+
     const rootNode = tree.find(e => e.id == id)
     if (!rootNode) return res.json(error('node not found'))
 
-    // Cargar datos del usuario raíz
     const rootUser = users.find(u => u.id === id)
     if (rootUser) {
       rootNode.name = rootUser.name
       rootNode.lastName = rootUser.lastName
       rootNode.affiliated = rootUser.affiliated
       rootNode.activated = rootUser.activated
-      rootNode.points = Number(rootUser.points) || 0
+      const rootVol = volumesForUser(volumeByUserId, rootUser.id)
+      rootNode.points = rootVol.personalProductCount
+      rootNode.personalProductCount = rootVol.personalProductCount
+      rootNode.total_points = rootVol.groupProductCount
+      rootNode.groupProductCount = rootVol.groupProductCount
       rootNode.affiliation_points = rootUser.affiliation_points || 0
       rootNode.photo = rootUser.photo
       rootNode.country = rootUser.country
@@ -147,10 +165,8 @@ export default async (req, res) => {
         : null
       rootNode._rank = closedRank || closedRankByDni || rootUser.rank
       rootNode.rank = closedRank || closedRankByDni || rootUser.rank
-      rootNode.total_points = rootUser.total_points || 0
     }
 
-    // Cargar TODOS los niveles recursivamente
     find(id, 0)
 
     // Obtener el nodo completo con todos sus hijos

@@ -3,7 +3,21 @@ import lib from "../../../components/lib"
 
 const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig, Activation, Affiliation } = db
 const { error, success, acum, midd, model } = lib
-const { computeMonthlyActivity } = require("../../../lib/monthlyActivity")
+const {
+  computeMonthlyActivity,
+  collectNetworkUserIds,
+} = require("../../../lib/monthlyActivity")
+
+function expandIdsForIn(ids) {
+  const out = new Set()
+  for (const id of ids || []) {
+    if (id == null || id === "") continue
+    out.add(id)
+    const n = Number(id)
+    if (!Number.isNaN(n)) out.add(n)
+  }
+  return [...out]
+}
 const { computeRankCycleProgress } = require("../../../lib/rankCycles")
 const { normalizePlanList } = require("../../../lib/planNames")
 const { getAffiliationPlans } = require("../../../lib/planCatalog")
@@ -94,39 +108,19 @@ export default async (req, res) => {
   }
 
   const allTree = await Tree.find({})
-  const treeMap = allTree.reduce((a, b) => { a[b.id] = b; return a }, {})
 
   if (node) {
-    function countNetwork(id) {
-      if (!treeMap[id]) return 0
-      const treeNode = treeMap[id]
-      let count = 0
-      if (treeNode.childs && treeNode.childs.length) {
-        treeNode.childs.forEach(childId => {
-          count += 1 + countNetwork(childId)
-        })
-      }
-      return count
-    }
-
-    n_affiliates_total = countNetwork(user.id)
+    const networkForCount = collectNetworkUserIds(user.id, allTree)
+    n_affiliates_total = Math.max(0, networkForCount.length - 1)
   }
 
   const monthStart = new Date()
   monthStart.setDate(1)
   monthStart.setHours(0, 0, 0, 0)
 
-  const networkIds = []
-  function collectIds(id) {
-    const n = treeMap[id]
-    if (!n || !n.childs) return
-    n.childs.forEach((cid) => {
-      networkIds.push(cid)
-      collectIds(cid)
-    })
-  }
-  collectIds(user.id)
-  const activationUserIds = [user.id, ...networkIds]
+  const activationUserIds = expandIdsForIn(
+    collectNetworkUserIds(user.id, allTree)
+  )
 
   const [networkActivations, networkAffiliations] = await Promise.all([
     Activation.find({
