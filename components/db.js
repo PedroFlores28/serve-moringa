@@ -3,6 +3,28 @@ const name = process.env.DB_NAME || process.env.DB_NAME_FALLBACK || "sifrah";
 
 const Client = require("mongodb").MongoClient;
 
+function normalizeAvatar(photo) {
+  const AVATAR_UNISEX = "/avatars/avatar-unisex.png?v=4";
+  const AVATAR_FEMENINO = "https://ik.imagekit.io/asu/impulse/avatar_cWVgh_GNP.png";
+  const AVATAR_MASCULINO = "https://moringa.b-cdn.net/avatars/avatar-masculino.png";
+  const FALLBACK_AVATAR = "https://ik.imagekit.io/asu/Lehaim/avatar_bEyc3MFLf.png";
+
+  if (!photo) return AVATAR_UNISEX;
+  const p = String(photo).trim();
+  if (
+    p === "" ||
+    p === AVATAR_FEMENINO ||
+    p === AVATAR_MASCULINO ||
+    p === FALLBACK_AVATAR ||
+    p.toLowerCase().includes("avatar-masculino.png") ||
+    p.toLowerCase().includes("avatar_cwvgh_gnp.png") ||
+    p.toLowerCase().includes("avatar_beyc3mflf.png")
+  ) {
+    return AVATAR_UNISEX;
+  }
+  return photo;
+}
+
 class DB {
   constructor({
     User,
@@ -72,6 +94,9 @@ class User {
     const db = conn.db(name);
     const user = await db.collection("users").findOne(query);
     client.close();
+    if (user) {
+      user.photo = normalizeAvatar(user.photo);
+    }
     return user;
   }
   async find(query) {
@@ -80,6 +105,13 @@ class User {
     const db = conn.db(name);
     const users = await db.collection("users").find(query).toArray();
     client.close();
+    if (users && Array.isArray(users)) {
+      for (const user of users) {
+        if (user) {
+          user.photo = normalizeAvatar(user.photo);
+        }
+      }
+    }
     return users;
   }
   async insert(user) {
