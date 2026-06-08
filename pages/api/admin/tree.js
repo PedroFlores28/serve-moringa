@@ -49,7 +49,7 @@ function find(id, n) {
 
   node.childs.forEach(_id => {
     const _node = tree.find(e => e.id == _id)
-    node._childs.push(_node)
+    if (_node) node._childs.push(_node)
   })
 }
 
