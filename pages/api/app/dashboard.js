@@ -21,6 +21,12 @@ function expandIdsForIn(ids) {
 const { computeRankCycleProgress } = require("../../../lib/rankCycles")
 const { normalizePlanList } = require("../../../lib/planNames")
 const { getAffiliationPlans } = require("../../../lib/planCatalog")
+const { getActivePeriodReferenceDate } = require("../../../lib/activePeriod")
+const {
+  startOfCalendarMonth,
+  endOfCalendarMonth,
+  calendarMonthKey,
+} = require("../../../lib/productTotals")
 
 const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'address', 'rank', 'points', 'parentId', 'total_points']
 export default async (req, res) => {
@@ -114,9 +120,10 @@ export default async (req, res) => {
     n_affiliates_total = Math.max(0, networkForCount.length - 1)
   }
 
-  const monthStart = new Date()
-  monthStart.setDate(1)
-  monthStart.setHours(0, 0, 0, 0)
+  const referenceDate = await getActivePeriodReferenceDate()
+  const monthStart = startOfCalendarMonth(referenceDate)
+  const monthEnd = endOfCalendarMonth(referenceDate)
+  const periodKey = calendarMonthKey(referenceDate)
 
   const activationUserIds = expandIdsForIn(
     collectNetworkUserIds(user.id, allTree)
@@ -127,16 +134,18 @@ export default async (req, res) => {
       userId: { $in: activationUserIds },
       status: "approved",
       $or: [
-        { date: { $gte: monthStart } },
-        { approved_at: { $gte: monthStart } },
+        { date: { $gte: monthStart, $lte: monthEnd } },
+        { approved_at: { $gte: monthStart, $lte: monthEnd } },
+        { period_key: periodKey },
       ],
     }),
     Affiliation.find({
       userId: { $in: activationUserIds },
       status: "approved",
       $or: [
-        { date: { $gte: monthStart } },
-        { approved_at: { $gte: monthStart } },
+        { date: { $gte: monthStart, $lte: monthEnd } },
+        { approved_at: { $gte: monthStart, $lte: monthEnd } },
+        { period_key: periodKey },
       ],
     }),
   ])
@@ -145,7 +154,8 @@ export default async (req, res) => {
     user,
     allTree,
     networkAffiliations,
-    networkActivations
+    networkActivations,
+    referenceDate
   )
 
   // Determine current provisional rank based on real performance

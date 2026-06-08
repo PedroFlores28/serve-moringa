@@ -9,6 +9,7 @@ const {
   buildVolumeMap,
   volumesForUser,
 } = require("../../../lib/treeVolumes")
+const { getActivePeriodReferenceDate } = require("../../../lib/activePeriod")
 
 let tree, nodes
 
@@ -272,17 +273,20 @@ export default async (req, res) => {
     )
     usersForVolumes.push(...childUsersOrdered.filter(Boolean))
   }
+  const referenceDate = await getActivePeriodReferenceDate()
   const networkUserIds = collectNetworkUserIds(nodeUser.id, allTree)
   const { activations, affiliations } = await fetchMonthRecordsForUsers(
     Activation,
     Affiliation,
-    networkUserIds
+    networkUserIds,
+    referenceDate
   )
   const volumeMap = buildVolumeMap(
     usersForVolumes,
     allTree,
     activations,
-    affiliations
+    affiliations,
+    referenceDate
   )
   const nodeVolumes = volumesForUser(volumeMap, nodeUser.id)
 

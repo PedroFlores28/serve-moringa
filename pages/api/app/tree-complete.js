@@ -8,6 +8,7 @@ const {
   buildVolumeMap,
   volumesForUser,
 } = require("../../../lib/treeVolumes")
+const { getActivePeriodReferenceDate } = require("../../../lib/activePeriod")
 
 let tree, users, volumeByUserId
 
@@ -131,13 +132,15 @@ export default async (req, res) => {
       if (dni && rnk) lastClosedRankByDni.set(String(dni), rnk)
     }
 
+    const referenceDate = await getActivePeriodReferenceDate()
     const userIds = users.map((u) => u.id).filter(Boolean)
     const { activations, affiliations } = await fetchMonthRecordsForUsers(
       Activation,
       Affiliation,
-      userIds
+      userIds,
+      referenceDate
     )
-    volumeByUserId = buildVolumeMap(users, tree, activations, affiliations)
+    volumeByUserId = buildVolumeMap(users, tree, activations, affiliations, referenceDate)
 
     const rootNode = tree.find(e => e.id == id)
     if (!rootNode) return res.json(error('node not found'))
