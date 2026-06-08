@@ -2,8 +2,14 @@ import db from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { resolveTreeRootId } = require("../../../lib/treeRoot")
+const {
+  fetchMonthRecordsForUsers,
+  buildVolumeMap,
+  volumesForUser,
+} = require("../../../lib/treeVolumes")
+const { getActivePeriodReferenceDate } = require("../../../lib/activePeriod")
 
-const { Tree, User, Closed } = db
+const { Tree, User, Closed, Activation, Affiliation } = db
 const { success, midd, map, error } = lib
 
 let tree, users, is_found
@@ -89,19 +95,37 @@ export default async (req, res) => {
     if (id && rank) lastClosedRankByUserId.set(String(id), rank)
   }
 
+  const referenceDate = await getActivePeriodReferenceDate()
+  const userIds = users.map((u) => u.id).filter(Boolean)
+  const { activations, affiliations } = await fetchMonthRecordsForUsers(
+    Activation,
+    Affiliation,
+    userIds,
+    referenceDate
+  )
+  const volumeByUserId = buildVolumeMap(
+    users,
+    tree,
+    activations,
+    affiliations,
+    referenceDate
+  )
+
   tree.forEach(node => {
     const user = users.find(e => e.id == node.id)
-    // node.name = user.name + ' ' + user.lastName
     if (user) {
+      const vol = volumesForUser(volumeByUserId, user.id)
       node.name = user.name
       node.lastName = user.lastName
       node.dni  = user.dni
       node.affiliated = user.affiliated
       node.activated = user.activated
       node._activated = user._activated
-      node.points = user.points
+      node.points = vol.personalProductCount
+      node.personalProductCount = vol.personalProductCount
+      node.total_points = vol.groupProductCount
+      node.groupProductCount = vol.groupProductCount
       node.affiliation_points = user.affiliation_points
-      // Priorizar rango del último cierre; fallback al rango del usuario.
       node.rank = lastClosedRankByUserId.get(String(user.id)) || user.rank || "none"
     }
   })
