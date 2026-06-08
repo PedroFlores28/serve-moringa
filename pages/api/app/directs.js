@@ -9,7 +9,16 @@ const { computeMonthlyActivity } = require("../../../lib/monthlyActivity")
 
 // models
 // const D = ['id', 'name', 'lastName', 'email', 'phone', 'affiliated', 'activated', 'affiliationDate']
-const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'points']
+const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'points', 'token']
+
+function mapDirectUser(direct, allTree, allAffiliations, allActivations) {
+  const d = model(direct, D)
+  d.points = Number(d.points !== undefined ? d.points : direct.points) || 0
+  const activity = computeMonthlyActivity(direct, allTree, allAffiliations, allActivations)
+  d.personalProductCount = activity.personalProductCount || 0
+  d.groupProductCount = activity.groupProductCount || 0
+  return { ...d }
+}
 
 
 const directs = async (req, res) => {
@@ -50,16 +59,17 @@ const directs = async (req, res) => {
   // find directs
   let directs = await User.find({ parentId: user.id })
 
-  directs = directs.map(direct => {
-    const d = model(direct, D)
-    // Asegurar que points siempre sea un número (puntos personales)
-    // Obtener points del modelo o directamente del objeto original
-    d.points = Number(d.points !== undefined ? d.points : direct.points) || 0
-    const activity = computeMonthlyActivity(direct, allTree, allAffiliations, allActivations)
-    d.personalProductCount = activity.personalProductCount || 0
-    d.groupProductCount = activity.groupProductCount || 0
-    return { ...d }
-  })
+  directs = directs.map((direct) =>
+    mapDirectUser(direct, allTree, allAffiliations, allActivations)
+  )
+
+  let sponsor = null
+  if (user.parentId) {
+    const parentUser = await User.findOne({ id: user.parentId })
+    if (parentUser) {
+      sponsor = mapDirectUser(parentUser, allTree, allAffiliations, allActivations)
+    }
+  }
 
   const node = await Tree.findOne({ id: user.id })
   console.log({ node })
@@ -71,16 +81,9 @@ const directs = async (req, res) => {
   // frontals = frontals.filter(e => e.parentId != user.id)
   console.log({ frontals })
 
-  frontals = frontals.map(frontal => {
-    const d = model(frontal, D)
-    // Asegurar que points siempre sea un número (puntos personales)
-    // Obtener points del modelo o directamente del objeto original
-    d.points = Number(d.points !== undefined ? d.points : frontal.points) || 0
-    const activity = computeMonthlyActivity(frontal, allTree, allAffiliations, allActivations)
-    d.personalProductCount = activity.personalProductCount || 0
-    d.groupProductCount = activity.groupProductCount || 0
-    return { ...d }
-  })
+  frontals = frontals.map((frontal) =>
+    mapDirectUser(frontal, allTree, allAffiliations, allActivations)
+  )
 
   // response
   return res.json(success({
@@ -98,6 +101,7 @@ const directs = async (req, res) => {
     id:       user.id,
     directs,
     frontals,
+    sponsor,
     // branch:   user.branch,
     // childs,
     // names,
