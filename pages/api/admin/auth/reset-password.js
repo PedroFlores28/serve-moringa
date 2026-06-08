@@ -18,12 +18,15 @@ export default async (req, res) => {
     return res.json(error('La nueva contraseña debe tener al menos 6 caracteres'));
   }
 
-  const user = await User.findOne({ dni: 'ADMIN' });
-  if (!user) return res.json(error('Usuario ADMIN no encontrado'));
+  const user =
+    (await User.findOne({ dni: "MORINGA", type: "admin" })) ||
+    (await User.findOne({ id: "admin", type: "admin" })) ||
+    (await User.findOne({ role: "superadmin", type: "admin" }));
+  if (!user) return res.json(error("Usuario principal no encontrado"));
 
   const hashed = await bcrypt.hash(newPassword, 12);
   
   await User.update({ id: user.id }, { password: hashed });
 
-  return res.json(success({ msg: 'Contraseña actualizada correctamente para el usuario ADMIN' }));
+  return res.json(success({ msg: "Contraseña actualizada correctamente para el usuario principal" }));
 }

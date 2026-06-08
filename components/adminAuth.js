@@ -1,5 +1,10 @@
 import db from "./db";
 import lib from "./lib";
+const {
+  hasPermission,
+  isSuperAdmin,
+  buildAdminAccount,
+} = require("../lib/adminPermissions");
 
 const { Session, User } = db;
 const { error } = lib;
@@ -50,8 +55,43 @@ export async function requireAdmin(req, res) {
     return null;
   }
 
+  if (user.adminActive === false) {
+    res.statusCode = 403;
+    res.json(error("account disabled"));
+    return null;
+  }
+
   return { user, session, value };
 }
+
+export async function requirePermission(req, res, moduleId) {
+  const auth = await requireAdmin(req, res);
+  if (!auth) return null;
+
+  const { user } = auth;
+  if (!hasPermission(user, moduleId)) {
+    res.statusCode = 403;
+    res.json(error("forbidden module"));
+    return null;
+  }
+
+  return auth;
+}
+
+export async function requireSuperAdmin(req, res) {
+  const auth = await requireAdmin(req, res);
+  if (!auth) return null;
+
+  if (!isSuperAdmin(auth.user)) {
+    res.statusCode = 403;
+    res.json(error("superadmin required"));
+    return null;
+  }
+
+  return auth;
+}
+
+export { buildAdminAccount, hasPermission, isSuperAdmin };
 
 export function getClientInfo(req) {
   const userAgent = (req.headers && (req.headers["user-agent"] || req.headers["User-Agent"])) || null;

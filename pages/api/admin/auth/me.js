@@ -1,6 +1,6 @@
 import db from "../../../../components/db";
 import lib from "../../../../components/lib";
-import { requireAdmin } from "../../../../components/adminAuth";
+import { requireAdmin, buildAdminAccount } from "../../../../components/adminAuth";
 
 const { success, midd } = lib;
 
@@ -13,14 +13,7 @@ export default async (req, res) => {
   const { user } = auth;
   return res.json(
     success({
-      account: {
-        id: user.id,
-        dni: user.dni,
-        name: user.name,
-        lastName: user.lastName,
-        email: user.email,
-        type: user.type,
-      },
+      account: buildAdminAccount(user),
     })
   );
 };

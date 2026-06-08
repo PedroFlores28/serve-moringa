@@ -5,71 +5,65 @@ const db = require("../components/db");
 
 const { User } = db;
 
+const MAIN_ADMIN = {
+  id: "admin",
+  dni: "MORINGA",
+  name: "Class Moringa",
+  email: "admin@classmoringa.local",
+  passwordPlain: process.env.ADMIN_PASSWORD || "moringa2026",
+};
+
 async function main() {
-  const passwordPlain = process.env.ADMIN_PASSWORD || "Admin2024!";
-
-  const dni = "ADMIN";
-  const email = "admin@sifrah.com";
-  const id = "admin";
-
-  const password = await bcrypt.hash(String(passwordPlain), 12);
+  const password = await bcrypt.hash(String(MAIN_ADMIN.passwordPlain), 12);
 
   const existing =
-    (await User.findOne({ dni })) ||
-    (await User.findOne({ dni: dni.toUpperCase() })) ||
-    (await User.findOne({ email: email.toLowerCase() })) ||
-    (await User.findOne({ id }));
+    (await User.findOne({ id: MAIN_ADMIN.id })) ||
+    (await User.findOne({ dni: MAIN_ADMIN.dni })) ||
+    (await User.findOne({ dni: "ADMIN" })) ||
+    (await User.findOne({ type: "admin", role: "superadmin" }));
 
-  if (existing && existing.id) {
-    await User.updateOne(
-      { id: existing.id },
-      {
-        dni,
-        email,
-        type: "admin",
-        affiliated: true,
-        activated: true,
-        plan: "admin",
-        password,
-        updatedAt: new Date(),
-      }
-    );
-
-    console.log("[OK] Admin actualizado en DB del server:", {
-      id: existing.id,
-      dni,
-      email,
-      password: passwordPlain,
-    });
-    return;
-  }
-
-  const admin = {
-    id,
-    dni,
-    name: "Administrador",
-    email,
-    password,
+  const patch = {
+    id: MAIN_ADMIN.id,
+    dni: MAIN_ADMIN.dni,
+    name: MAIN_ADMIN.name,
+    email: MAIN_ADMIN.email,
     type: "admin",
     affiliated: true,
     activated: true,
     plan: "admin",
-    date: new Date(),
+    role: "superadmin",
+    permissions: [],
+    adminActive: true,
+    password,
+    updatedAt: new Date(),
   };
 
-  await User.insert(admin);
-  console.log("[OK] Admin creado en DB del server:", {
-    id,
-    dni,
-    email,
-    password: passwordPlain,
+  if (existing && existing.id) {
+    await User.updateOne({ id: existing.id }, patch);
+    console.log("[OK] Admin principal actualizado:", {
+      id: existing.id,
+      dni: MAIN_ADMIN.dni,
+      password: MAIN_ADMIN.passwordPlain,
+    });
+    return;
+  }
+
+  await User.insert({
+    ...patch,
+    lastName: "",
+    date: new Date(),
+  });
+
+  console.log("[OK] Admin principal creado:", {
+    id: MAIN_ADMIN.id,
+    dni: MAIN_ADMIN.dni,
+    password: MAIN_ADMIN.passwordPlain,
   });
 }
 
 main()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error("[ERROR] No se pudo crear/admin:", err);
+    console.error("[ERROR] No se pudo crear/actualizar admin:", err);
     process.exit(1);
   });
-

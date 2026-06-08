@@ -1,83 +1,62 @@
-import bcrypt from "bcrypt";
-import db from "../../../../components/db";
-import lib from "../../../../components/lib";
-import { getClientInfo } from "../../../../components/adminAuth";
-
-const { User, Session } = db;
-const { rand, error, success, midd } = lib;
-
-/** Credenciales fijas de desarrollo (admin panel). */
-const HARDCODED_ADMIN = {
-  identifiers: ["ADMIN", "admin@sifrah.com", "admin"],
-  password: "MoringaAdmin2025!",
-};
-
-function matchesHardcodedAdmin(iden, password) {
-  const id = String(iden).trim();
-  const idOk = HARDCODED_ADMIN.identifiers.some(
-    (x) => id.toLowerCase() === x.toLowerCase() || id.toUpperCase() === x.toUpperCase()
-  );
-  return idOk && String(password) === HARDCODED_ADMIN.password;
-}
-
-const handler = async (req, res) => {
-  if (req.method === "OPTIONS") return res.status(200).send("ok");
-  if (req.method !== "POST") return res.status(405).json(error("method not allowed"));
-
-  const { emailOrDni, password } = req.body || {};
-  if (!emailOrDni || !password) return res.json(error("missing credentials"));
-
-  // Limpiar el identificador (ADMIN, admin, email, etc)
-  const iden = String(emailOrDni).trim();
-
-  const hardcoded = matchesHardcodedAdmin(iden, password);
-
-  // Búsqueda secuencial para máxima compatibilidad
-  let user = hardcoded
-    ? (await User.findOne({ id: "admin" })) ||
-      (await User.findOne({ type: "admin" })) ||
-      (await User.findOne({ dni: "ADMIN" }))
-    : null;
-
-  if (!user) user = await User.findOne({ dni: iden.toUpperCase() });
-  if (!user) user = await User.findOne({ email: iden.toLowerCase() });
-  if (!user) user = await User.findOne({ email: iden });
-  if (!user) user = await User.findOne({ id: iden.toLowerCase() });
-
-  if (!user || user.type !== "admin") {
-    return res.json(error("invalid account"));
-  }
-
-  if (!hardcoded) {
-    const ok = await bcrypt.compare(String(password), String(user.password || ""));
-    if (!ok) return res.json(error("invalid password"));
-  }
-
-  const sessionValue = rand() + rand() + rand();
-  const { userAgent, ip } = getClientInfo(req);
-
-  await Session.insert({
-    id: user.id,
-    value: sessionValue,
-    kind: "admin",
-    createdAt: new Date(),
-    userAgent,
-    ip,
-  });
-
-  const account = {
-    id: user.id,
-    dni: user.dni,
-    name: user.name,
-    lastName: user.lastName,
-    email: user.email,
-    type: user.type,
-  };
-
-  return res.json(success({ session: sessionValue, account }));
-};
-
-export default async (req, res) => {
-  await midd(req, res);
-  return handler(req, res);
-};
+import bcrypt from "bcrypt";
+import db from "../../../../components/db";
+import lib from "../../../../components/lib";
+import { getClientInfo, buildAdminAccount } from "../../../../components/adminAuth";
+
+const { User, Session } = db;
+const { rand, error, success, midd } = lib;
+
+const handler = async (req, res) => {
+  if (req.method === "OPTIONS") return res.status(200).send("ok");
+  if (req.method !== "POST") return res.status(405).json(error("method not allowed"));
+
+  const { emailOrDni, password } = req.body || {};
+  if (!emailOrDni || !password) return res.json(error("missing credentials"));
+
+  const iden = String(emailOrDni).trim();
+  const loginUpper = iden.toUpperCase();
+  const loginLower = iden.toLowerCase();
+
+  let user =
+    (await User.findOne({ dni: loginUpper, type: "admin" })) ||
+    (await User.findOne({ email: loginLower, type: "admin" })) ||
+    (await User.findOne({ email: iden, type: "admin" })) ||
+    (await User.findOne({ id: loginLower, type: "admin" }));
+
+  if (!user) {
+    const byDni = await User.findOne({ dni: loginUpper });
+    if (byDni && byDni.type === "admin") user = byDni;
+  }
+
+  if (!user || user.type !== "admin") {
+    return res.json(error("invalid account"));
+  }
+
+  if (user.adminActive === false) {
+    return res.json(error("account disabled"));
+  }
+
+  const ok = await bcrypt.compare(String(password), String(user.password || ""));
+  if (!ok) return res.json(error("invalid password"));
+
+  const sessionValue = rand() + rand() + rand();
+  const { userAgent, ip } = getClientInfo(req);
+
+  await Session.insert({
+    id: user.id,
+    value: sessionValue,
+    kind: "admin",
+    createdAt: new Date(),
+    userAgent,
+    ip,
+  });
+
+  const account = buildAdminAccount(user);
+
+  return res.json(success({ session: sessionValue, account }));
+};
+
+export default async (req, res) => {
+  await midd(req, res);
+  return handler(req, res);
+};
