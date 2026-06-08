@@ -107,48 +107,6 @@ async function closeActivePeriodAndOpenNext() {
   return { closedPeriod, nextPeriod, note: null }
 }
 
-function buildLegDetails(previewTree, usersList, treeList) {
-  const userById = new Map((usersList || []).map((u) => [u.id, u]))
-  const treeById = new Map((treeList || []).map((n) => [n.id, n]))
-  const memoTotals = new Map()
-
-  const totalPoints = (id) => {
-    if (!id) return 0
-    if (memoTotals.has(id)) return memoTotals.get(id)
-
-    const user = userById.get(id)
-    const node = treeById.get(id)
-    const own = Number(user?.points || 0) + Number(user?.affiliation_points || 0)
-    let total = own
-
-    for (const childId of (node?.childs || [])) {
-      total += totalPoints(childId)
-    }
-
-    memoTotals.set(id, total)
-    return total
-  }
-
-  return (previewTree || []).map((node) => {
-    const sourceNode = treeById.get(node.id)
-    const legs = (sourceNode?.childs || []).map((childId, index) => {
-      const childUser = userById.get(childId)
-      return {
-        idx: index + 1,
-        user_id: childId,
-        dni: childUser?.dni || "",
-        name: [childUser?.name, childUser?.lastName].filter(Boolean).join(" ").trim() || "Sin nombre",
-        personal_points: Number(childUser?.points || 0) + Number(childUser?.affiliation_points || 0),
-        total_points: totalPoints(childId),
-      }
-    })
-
-    return {
-      ...node,
-      grouped_points_legs: legs,
-    }
-  })
-}
 
 /* Helpers Go retirados: el cierre ahora corre 100% en JavaScript (serve/lib/cierreEngine.js). */
 
@@ -416,7 +374,6 @@ export default async (req, res) => {
 
         const usersList = await User.find({})
         const treeList = await Tree.find({})
-        const enrichedTree = buildLegDetails(result.tree, usersList, treeList)
 
         const { enrichPreviewTreeWithRankBonuses } = require("../../../lib/applyRankBonusesOnClose")
         const closedsList = await Closed.find({})
@@ -427,7 +384,7 @@ export default async (req, res) => {
           rankPayDocs = []
         }
         const treeWithRankBonuses = enrichPreviewTreeWithRankBonuses(
-          enrichedTree,
+          result.tree,
           closedsList,
           rankPayDocs,
           usersList
