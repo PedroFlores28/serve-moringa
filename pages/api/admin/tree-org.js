@@ -1,8 +1,10 @@
 import db from "../../../components/db"
 import lib from "../../../components/lib"
 
+const { resolveTreeRootId } = require("../../../lib/treeRoot")
+
 const { Tree, User } = db
-const { success, midd, map } = lib
+const { success, midd, map, error } = lib
 
 
 let tree
@@ -57,13 +59,23 @@ export default async (req, res) => {
   // console.log({ users })
 
   tree.forEach(el => {
-    el.name = users.get(el.id).name
+    const user = users.get(el.id)
+    el.name = user && user.name ? user.name : ""
   })
-  console.log({ tree })
+
+  const treeUsers = await User.find({ tree: true })
+  const id = resolveTreeRootId(tree, {
+    preferUserIds: treeUsers.map((u) => u.id),
+  })
+  if (!id) {
+    return res.json(error("no se encontró la raíz del árbol"))
+  }
 
   tree = tree.reduce((a, b) => { a[`${b.id}`] = b; return a }, {})
+  if (!tree[id]) {
+    return res.json(error("no se encontró la raíz del árbol"))
+  }
 
-  const id = '5f0e0b67af92089b5866bcd0'
   l = 0
   count(id, 0)
   // console.log({ l })

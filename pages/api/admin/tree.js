@@ -1,6 +1,8 @@
 import db from "../../../components/db"
 import lib from "../../../components/lib"
 
+const { resolveTreeRootId } = require("../../../lib/treeRoot")
+
 const { Tree, User, Closed } = db
 const { success, midd, map, error } = lib
 
@@ -36,9 +38,7 @@ function find(id, n) {
   if(n == 100) return
 
   const node = tree.find(e => e.id == id)
-
-
-  if(node.childs.length == 0) return
+  if (!node || !Array.isArray(node.childs) || node.childs.length == 0) return
 
 
   node.childs.forEach(_id => {
@@ -56,6 +56,7 @@ function find(id, n) {
 
 function found(id, __id) {
   const node = tree.find(e => e.id == id)
+  if (!node || !Array.isArray(node.childs)) return
 
   node.childs.forEach(_id => {
     if(_id == __id) is_found = true
@@ -69,7 +70,8 @@ export default async (req, res) => {
 
   tree  = await Tree.find({})
 
-  users = await User.find({ tree: true })
+  const treeIds = tree.map((n) => n.id)
+  users = await User.find({ id: { $in: treeIds } })
 
   // Tomar el último cierre para reflejar el rango “real” (según cierre) en la red.
   // Nota: el cierre puede guardar `users` en raíz o dentro de `data.users` según implementación.
@@ -105,18 +107,21 @@ export default async (req, res) => {
   })
 
   if(req.method == 'GET') {
-    console.log('GET ...')
-    // get tree
+    const rootId = resolveTreeRootId(tree, {
+      preferUserIds: users.map((u) => u.id),
+    })
+    if (!rootId) {
+      return res.json(error("no se encontró la raíz del árbol"))
+    }
 
-    find('5f0e0b67af92089b5866bcd0', 0)
+    find(rootId, 0)
 
-    const node = tree.find(e => e.id == '5f0e0b67af92089b5866bcd0')
-    console.log(node)
+    const node = tree.find(e => e.id == rootId)
+    if (!node) {
+      return res.json(error("no se encontró la raíz del árbol"))
+    }
 
-    // response
-    return res.json(success({
-      node
-    }))
+    return res.json(success({ node }))
   }
 
   if(req.method == 'POST') {
