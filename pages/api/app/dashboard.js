@@ -160,8 +160,6 @@ export default async (req, res) => {
 
   // Determine current provisional rank based on real performance
   const rankRequirements = {
-    'star': { points: 300, childs: 2 },
-    'master': { points: 900, childs: 2 },
     'silver': { points: 1800, childs: 3 },
     'gold': { points: 3300, childs: 3 },
     'sapphire': { points: 9000, childs: 4 },
@@ -172,7 +170,7 @@ export default async (req, res) => {
     'DIAMANTE ESTRELLA': { points: 520000, childs: 6 }
   }
 
-  const rankOrder = ['none', 'active', 'star', 'master', 'silver', 'gold', 'sapphire', 'RUBI', 'DIAMANTE', 'DOBLE DIAMANTE', 'TRIPLE DIAMANTE', 'DIAMANTE ESTRELLA']
+  const rankOrder = ['none', 'active', 'silver', 'gold', 'sapphire', 'RUBI', 'DIAMANTE', 'DOBLE DIAMANTE', 'TRIPLE DIAMANTE', 'DIAMANTE ESTRELLA']
 
   let provisionalRank = (user.activated || user._activated) ? 'active' : 'none'
   const currentTotalPoints = user.total_points || 0
@@ -193,7 +191,7 @@ export default async (req, res) => {
   const nextRankName = provisionalRankIndex < rankOrder.length - 1 ? rankOrder[provisionalRankIndex + 1] : null
 
   const rankCycle = computeRankCycleProgress(
-    nextRankName || "star",
+    nextRankName || "silver",
     monthlyActivity.groupProductCount,
     currentDirects
   )
