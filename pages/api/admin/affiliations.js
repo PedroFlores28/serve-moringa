@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 import { requireAdmin } from "../../../components/adminAuth";
 const affiliationBonus = require("../../../lib/affiliationBonus");
+const residualBonus = require("../../../lib/residualBonus");
 
 // Función inline para enviar el email de bienvenida SIFRAH
 async function sendSifrahWelcomeEmail({ email, name, lastName, dni }) {
@@ -120,6 +121,7 @@ const {
   Closed,
   Period,
   Activation,
+  Product,
 } = db;
 const { error, success, midd, ids, parent_ids, map, model, rand } = lib;
 
@@ -446,7 +448,38 @@ const handler = async (req, res) => {
 
       if (bonusTxId) pays.push(bonusTxId);
 
-      await Affiliation.update({ id }, { transactions: pays });
+      // Bono residual: inmediato sobre los productos del paquete de afiliación,
+      // distribuido linealmente hasta 8 niveles (sin rangos ni compresión dinámica).
+      try {
+        const residualResult = await residualBonus.payAffiliationResidualBonus({
+          affiliation: { ...affiliation, status: "approved", approved_at: approvedAt },
+          Tree,
+          User,
+          Transaction,
+          Product,
+          Affiliation,
+          rand,
+          referenceDate: approvedAt,
+          usersMap: users,
+        });
+        if (residualResult.created && residualResult.created.length) {
+          pays.push(...residualResult.created);
+          console.log(
+            `[Affiliation Residual] ${residualResult.created.length} pagos residuales generados para afiliación ${affiliation.id}`
+          );
+        } else {
+          console.log(
+            `[Affiliation Residual] Sin pagos residuales para afiliación ${affiliation.id} (${residualResult.reason || "n/a"})`
+          );
+        }
+      } catch (residualError) {
+        console.error(
+          `[Affiliation Residual] Error generando residual para afiliación ${affiliation.id}:`,
+          residualError.message
+        );
+      }
+
+      await Affiliation.update({ id }, { transactions: pays, residual_generated: true });
 
       // UPDATE STOCK
       const office_id = affiliation.office;
