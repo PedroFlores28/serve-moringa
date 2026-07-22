@@ -6,10 +6,11 @@ import { requireAdmin } from "../../../components/adminAuth";
 const URL = process.env.DB_URL; // Asegúrate de que esta variable esté definida correctamente
 const name = process.env.DB_NAME;
 
-const { Activation, Affiliation, User, Tree, Token, Office, Transaction, Closed, Period } = db;
+const { Activation, Affiliation, User, Tree, Token, Office, Transaction, Closed, Period, Product } = db;
 const { error, success, midd, ids, map, model, rand } = lib;
 
 const { isClassOrEmpresarioPlan } = require("../../../lib/monthlyActivity")
+const { payActivationResidualBonus } = require("../../../lib/residualBonus")
 
 function monthBounds(referenceDate) {
   const d = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
@@ -603,6 +604,26 @@ export default async (req, res) => {
           );
         }
       }
+
+      // --- PAY REAL TIME RESIDUAL BONUS ---
+      console.log("PAY REAL TIME RESIDUAL BONUS ...");
+      await payActivationResidualBonus({
+        activation,
+        Tree,
+        User,
+        Transaction,
+        Product,
+        rand
+      });
+
+      // ACTUALIZAR EL ESTADO DE LA ACTIVACIÓN CON EL FLAG
+      await Activation.update(
+        { id: activation.id },
+        {
+          real_time_residual_paid: true,
+          transactions: activation.transactions,
+        }
+      );
 
       // response
       return res.json(success());
