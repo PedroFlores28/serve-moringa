@@ -120,7 +120,7 @@ export default async (req, res) => {
     n_affiliates_total = Math.max(0, networkForCount.length - 1)
   }
 
-  const referenceDate = await getActivePeriodReferenceDate()
+  const referenceDate = new Date()
   const monthStart = startOfCalendarMonth(referenceDate)
   const monthEnd = endOfCalendarMonth(referenceDate)
   const periodKey = calendarMonthKey(referenceDate)
