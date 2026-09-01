@@ -158,48 +158,28 @@ export default async (req, res) => {
     referenceDate
   )
 
-  // Determine current provisional rank based on real performance
-  const rankRequirements = {
-    'silver': { points: 1800, childs: 3 },
-    'gold': { points: 3300, childs: 3 },
-    'sapphire': { points: 9000, childs: 4 },
-    'RUBI': { points: 21000, childs: 4 },
-    'DIAMANTE': { points: 60000, childs: 5 },
-    'DOBLE DIAMANTE': { points: 115000, childs: 5 },
-    'TRIPLE DIAMANTE': { points: 225000, childs: 6 },
-    'DIAMANTE ESTRELLA': { points: 520000, childs: 6 }
-  }
-
-  const rankOrder = ['none', 'active', 'silver', 'gold', 'sapphire', 'RUBI', 'DIAMANTE', 'DOBLE DIAMANTE', 'TRIPLE DIAMANTE', 'DIAMANTE ESTRELLA']
-
-  let provisionalRank = (user.activated || user._activated) ? 'active' : 'none'
-  const currentTotalPoints = user.total_points || 0
+  // Use the user's DB state for cycles
+  const currentMonthProducts = (monthlyActivity.personalProductCount || 0) + (monthlyActivity.groupProductCount || 0)
   const currentDirects = directs.length || 0
 
-  // Check highest met rank
-  for (let i = 2; i < rankOrder.length; i++) {
-    const rName = rankOrder[i]
-    const req = rankRequirements[rName]
-    if (currentTotalPoints >= req.points && currentDirects >= req.childs) {
-      provisionalRank = rName
-    } else {
-      break // Doesn't meet this or higher
-    }
-  }
-
-  const provisionalRankIndex = rankOrder.indexOf(provisionalRank)
-  const nextRankName = provisionalRankIndex < rankOrder.length - 1 ? rankOrder[provisionalRankIndex + 1] : null
+  const provisionalRank = user.rank || 'ACTIVO'
+  const nextRankName = user.qualifying_rank || 'plata'
 
   const rankCycle = computeRankCycleProgress(
-    nextRankName || "silver",
-    monthlyActivity.groupProductCount,
+    nextRankName,
+    Number(user.completed_cycles) || 0,
+    currentMonthProducts,
+    Number(user.cycle_overflow) || 0,
     currentDirects
   )
-
+  
   let nextRankPercentage = rankCycle.overallPct
   if (nextRankName === "active") {
     nextRankPercentage = (user.activated || user._activated) ? 100 : 0
   }
+
+
+  
 
   // response
   return res.json(success({
