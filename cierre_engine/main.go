@@ -234,11 +234,20 @@ func main() {
 	var previewNodes []PreviewNode
 
 	// PASS 1: Calculate Ranks
+	cycleResults := make(map[string]engine.CycleResult)
 	closedRanks := make(map[string]string)
 	for i := range users {
 		user := &users[i]
-		rank := ce.CalculateRank(user.ID)
-		closedRanks[user.ID] = rank
+		res := ce.ProcessCyclesAndRank(user.ID)
+		cycleResults[user.ID] = res
+		closedRanks[user.ID] = res.MaxRank
+		
+		// Update user with new state
+		user.MaxRank = res.MaxRank
+		user.QualifyingRank = res.QualifyingRank
+		user.CompletedCycles = res.CompletedCycles
+		user.CycleOverflow = res.Overflow
+		user.CycleStatus = res.Status
 	}
 
 	// PASS 2: Calculate Bonuses
@@ -265,6 +274,18 @@ func main() {
 		}
 		totalBonusTransactions = append(totalBonusTransactions, genTxs...)
 		genLines := generationalLinesFromTxs(genTxs)
+
+		// C.5. Rank Bonus
+		if res, ok := cycleResults[user.ID]; ok && res.GeneratedBonus > 0 {
+			totalBonusTransactions = append(totalBonusTransactions, models.Transaction{
+				UserID: user.ID,
+				Type:   "in",
+				Value:  res.GeneratedBonus,
+				Name:   "rank bonus",
+				Desc:   "Bono de rango completado: " + res.QualifyingRank,
+				Date:   time.Now(),
+			})
+		}
 
 		// D. Savings Bonus (Bono Ahorro)
 		savTxs, savTotal := ce.CalculateSavingsBonus(user.ID)

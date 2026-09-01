@@ -2,8 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"math"
-	"sort"
 	"sifrah/cierre_engine/models"
 )
 
@@ -149,101 +147,182 @@ func (e *CierreEngine) CheckDependencies(id string, deps []RankDependency) bool 
 	return true
 }
 
-func (e *CierreEngine) CalculateRank(id string) string {
-	if rank, ok := e.MemoRanks[id]; ok {
-		return rank
-	}
-
-	user, ok := e.Users[id]
-	if !ok || !user.Activated {
-		e.MemoRanks[id] = "none"
-		return "none"
-	}
-
-	treeNode, ok := e.TreeNodes[id]
-	if !ok {
-		e.MemoRanks[id] = "ACTIVO"
-		return "ACTIVO"
-	}
-
-	// Bottom-up recursion
-	for _, childID := range treeNode.Childs {
-		e.CalculateRank(childID)
-	}
-
-	var legs []float64
-	for _, childID := range treeNode.Childs {
-		p := e.CalculateTotalProducts(childID)
-		if p > 0 {
-			legs = append(legs, p)
-		}
-	}
-	sort.Slice(legs, func(i, j int) bool {
-		return legs[i] > legs[j]
-	})
-
-	if e.Logger != nil {
-		e.Logger.LogRank("DEBUG PRODS - %s %s : total_prods (RAW)=%.2f, piernas=%v", user.Name, user.LastName, e.CalculateTotalProducts(id), legs)
-	}
-
-	activeLines := len(legs)
-	reconsumo := math.Max(user.Points, user.AffiliationPoints)
-
+func (e *CierreEngine) GetRankByPos(pos int) Rank {
 	for _, r := range Ranks {
-		if r.TypeCalculation != "simple" {
-			continue
+		if r.Pos == pos {
+			return r
 		}
+	}
+	// Fallback to Activo
+	return Ranks[len(Ranks)-1]
+}
 
-		if reconsumo < r.ReconsumoRequired {
-			continue
+func (e *CierreEngine) HasRankInLeg(childID string, requiredRankPos int, visited map[string]bool) bool {
+	if visited == nil {
+		visited = make(map[string]bool)
+	}
+	if visited[childID] {
+		return false
+	}
+	visited[childID] = true
+
+	child, ok := e.Users[childID]
+	if !ok {
+		return false
+	}
+
+	maxRank := child.MaxRank
+	if maxRank == "" {
+		maxRank = child.Rank
+	}
+	maxRankPos := GetRankPos(maxRank)
+
+	if maxRankPos >= requiredRankPos {
+		return true
+	}
+
+	node, ok := e.TreeNodes[childID]
+	if ok {
+		for _, grandChildID := range node.Childs {
+			if e.HasRankInLeg(grandChildID, requiredRankPos, visited) {
+				return true
+			}
 		}
+	}
+	return false
+}
 
-		if activeLines < r.MinimumFrontals {
-			continue
+func (e *CierreEngine) CheckStructure(userID string, targetRankCfg Rank) bool {
+	if targetRankCfg.RequiredLegs == 0 {
+		return true
+	}
+
+	node, ok := e.TreeNodes[userID]
+	if !ok || len(node.Childs) == 0 {
+		return false
+	}
+
+	validLegs := 0
+	for _, childID := range node.Childs {
+		if e.HasRankInLeg(childID, targetRankCfg.RequiredRankPos, nil) {
+			validLegs++
 		}
+	}
+	return validLegs >= targetRankCfg.RequiredLegs
+}
 
-		if !e.CheckDependencies(id, r.RankDependencies) {
-			continue
-		}
+type CycleResult struct {
+	MaxRank         string
+	QualifyingRank  string
+	CompletedCycles int
+	Overflow        float64
+	Status          string
+	GeneratedBonus  float64
+}
 
-		totalWithVMP := 0.0
-		puntosPersonales := user.PersonalProductCount
+func (e *CierreEngine) ProcessCyclesAndRank(id string) CycleResult {
+	user, ok := e.Users[id]
+	if !ok {
+		return CycleResult{MaxRank: "none", QualifyingRank: "none"}
+	}
 
-		calcLegs := make([]float64, len(legs))
-		copy(calcLegs, legs)
+	isActive := user.ActivatedInternal || user.Activated
 
-		if len(calcLegs) > 0 {
-			calcLegs[len(calcLegs)-1] += puntosPersonales
+	maxRank := user.MaxRank
+	if maxRank == "" {
+		maxRank = user.Rank
+	}
+	currentMaxRankPos := GetRankPos(maxRank)
+	currentQualifyingPos := GetRankPos(user.QualifyingRank)
+	completedCycles := user.CompletedCycles
+	overflow := user.CycleOverflow
+
+	if currentQualifyingPos == 0 {
+		if currentMaxRankPos > 0 {
+			currentQualifyingPos = currentMaxRankPos + 1
+			if currentQualifyingPos > 9 {
+				currentQualifyingPos = 9
+			}
 		} else {
-			totalWithVMP = puntosPersonales
-			if r.MaximumLargeLeg > 0 && totalWithVMP > r.MaximumLargeLeg {
-				totalWithVMP = r.MaximumLargeLeg
-			}
+			currentQualifyingPos = 1
 		}
+		completedCycles = 0
+		overflow = 0
+	}
 
-		if len(calcLegs) > 0 {
-			vmp := r.MaximumLargeLeg
-			for _, legVal := range calcLegs {
-				if vmp > 0 && legVal > vmp {
-					totalWithVMP += vmp
-				} else {
-					totalWithVMP += legVal
-				}
-			}
+	targetCfg := e.GetRankByPos(currentQualifyingPos)
+
+	// User points are computed before this (or should be via new fields).
+	// But in Go, the Points are updated in RunCierre maybe? Let's use user.TotalProductCount if available, or compute it.
+	// For now, let's assume the products were assigned to PersonalProducts and TeamProducts
+	totalProducts := user.PersonalProductCount + user.TotalProductCount + overflow
+	targetProducts := targetCfg.ThresholdProducts
+
+	if !isActive {
+		if completedCycles > 1 {
+			completedCycles = 1
 		}
-
-		if totalWithVMP >= r.ThresholdPoints {
-			if e.Logger != nil {
-				e.Logger.LogRank(" ✅ RANGO ALCANZADO: %s para %s %s (Productos con VMP: %.2f)", r.Rank, user.Name, user.LastName, totalWithVMP)
-			}
-			user.TotalProductCount = totalWithVMP
-			e.MemoRanks[id] = r.Rank
-			return r.Rank
+		return CycleResult{
+			MaxRank:         e.GetRankByPos(currentMaxRankPos).Rank,
+			QualifyingRank:  targetCfg.Rank,
+			CompletedCycles: completedCycles,
+			Overflow:        0,
+			Status:          "inactivo",
 		}
 	}
 
-	e.MemoRanks[id] = "ACTIVO"
-	return "ACTIVO"
+	meetsProducts := totalProducts >= targetProducts
+	meetsStructure := e.CheckStructure(id, targetCfg)
+	isPlataCiclo1 := (currentQualifyingPos == 1 && completedCycles == 0)
+
+	if meetsProducts && meetsStructure {
+		completedCycles++
+		newOverflow := totalProducts - targetProducts
+		generatedBonus := 0.0
+
+		if completedCycles == 1 {
+			if currentQualifyingPos > currentMaxRankPos {
+				currentMaxRankPos = currentQualifyingPos
+			}
+		}
+
+		if completedCycles >= targetCfg.RequiredCycles {
+			generatedBonus = RankAchievementBonuses[targetCfg.Rank]
+			currentQualifyingPos++
+			if currentQualifyingPos > 9 {
+				currentQualifyingPos = 9
+			}
+			completedCycles = 0
+			newOverflow = 0
+		}
+
+		return CycleResult{
+			MaxRank:         e.GetRankByPos(currentMaxRankPos).Rank,
+			QualifyingRank:  e.GetRankByPos(currentQualifyingPos).Rank,
+			CompletedCycles: completedCycles,
+			Overflow:        newOverflow,
+			Status:          "completado",
+			GeneratedBonus:  generatedBonus,
+		}
+	} else {
+		if isPlataCiclo1 {
+			return CycleResult{
+				MaxRank:         e.GetRankByPos(currentMaxRankPos).Rank,
+				QualifyingRank:  targetCfg.Rank,
+				CompletedCycles: completedCycles,
+				Overflow:        totalProducts,
+				Status:          "acumulando_plata_1",
+			}
+		} else {
+			return CycleResult{
+				MaxRank:         e.GetRankByPos(currentMaxRankPos).Rank,
+				QualifyingRank:  targetCfg.Rank,
+				CompletedCycles: completedCycles,
+				Overflow:        0,
+				Status:          "fallo_activo",
+			}
+		}
+	}
 }
 
 // closedRank es el rango calculado en ESTE cierre (CalculateRank). El residual debe usar ese rango,

@@ -25,18 +25,21 @@ type User struct {
 	TotalProductCount    float64   `bson:"-" json:"-"`
 	Activated            bool      `bson:"activated" json:"activated"`
 	Rank                 string    `bson:"rank" json:"rank"`
+	MaxRank              string    `bson:"max_rank" json:"max_rank"`
+	QualifyingRank       string    `bson:"qualifying_rank" json:"qualifying_rank"`
+	CompletedCycles      int       `bson:"completed_cycles" json:"completed_cycles"`
+	CycleOverflow        float64   `bson:"cycle_overflow" json:"cycle_overflow"`
 	TotalPoints          float64   `bson:"total_points" json:"total_points"`
 	Pays                 []Pay     `bson:"pays" json:"pays"`
 	Affiliated           bool      `bson:"affiliated" json:"affiliated"`
 	ActivatedInternal    bool      `bson:"_activated" json:"_activated"`
 	AffiliationDate      time.Time `bson:"affiliation_date" json:"affiliation_date"`
-	// ResidualVolume — suma (cantidad × ganancia residual Bs) del periodo; motor de cierre.
-	ResidualVolume    float64   `bson:"-" json:"-"`
-	// Computed fields (not persisted directly, used for history entry)
+	ResidualVolume       float64   `bson:"-" json:"-"`
 	LastResidualBonus     float64   `bson:"-" json:"-"`
 	LastGenerationalBonus float64   `bson:"-" json:"-"`
 	LastSavingsBonus      float64   `bson:"-" json:"-"`
 	LastTotalPoints       float64   `bson:"-" json:"-"`
+	CycleStatus           string    `bson:"-" json:"-"`
 }
 
 type TreeNode struct {
@@ -101,6 +104,8 @@ type ClosedUserEntry struct {
 	Rank              string              `bson:"rank" json:"rank"`
 	Points            float64             `bson:"points" json:"points"`
 	TotalPoints       float64             `bson:"total_points" json:"total_points"`
+	PersonalProducts  float64             `bson:"personal_products" json:"personal_products"`
+	TeamProducts      float64             `bson:"team_products" json:"team_products"`
 	ResidualBonus     float64                 `bson:"residual_bonus" json:"residual_bonus"`
 	ResidualLines     []ResidualLineEntry     `bson:"residual_lines,omitempty" json:"residual_lines,omitempty"`
 	GenerationalBonus float64                 `bson:"generational_bonus" json:"generational_bonus"`
