@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 import (
 	"sifrah/cierre_engine/models"
 )
@@ -10,8 +12,8 @@ func (e *CierreEngine) ApplyResidualVolumes(products []models.Product, activatio
 	byID := make(map[string]float64)
 	byCode := make(map[string]float64)
 	for _, p := range products {
-		if p.ID != "" {
-			byID[p.ID] = p.ResidualProfit
+		if fmt.Sprintf("%v", p.ID) != "" {
+			byID[fmt.Sprintf("%v", p.ID)] = p.ResidualProfit
 		}
 		if p.Code != "" {
 			byCode[p.Code] = p.ResidualProfit
@@ -22,8 +24,8 @@ func (e *CierreEngine) ApplyResidualVolumes(products []models.Product, activatio
 		if line.ResidualProfit > 0 {
 			return line.ResidualProfit
 		}
-		if line.ID != "" {
-			if v, ok := byID[line.ID]; ok {
+		if fmt.Sprintf("%v", line.ID) != "" {
+			if v, ok := byID[fmt.Sprintf("%v", line.ID)]; ok {
 				return v
 			}
 		}
