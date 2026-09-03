@@ -296,7 +296,8 @@ func main() {
 		totalBonusTransactions = append(totalBonusTransactions, savTxs...)
 
 		// Collect preview data BEFORE resetting
-		if rank != "none" || calculatedTotalPoints > 0 || resTotal > 0 || genTotal > 0 || savTotal > 0 {
+				hasActivity := calculatedTotalPoints > 0 || resTotal > 0 || genTotal > 0 || savTotal > 0 || cycleResults[user.ID].GeneratedBonus > 0 || (cycleResults[user.ID].Status != "inactivo" && cycleResults[user.ID].Status != "fallo_activo")
+		if hasActivity {
 			previewNodes = append(previewNodes, PreviewNode{
 				ID:                user.ID,
 				Name:              user.Name + " " + user.LastName,
