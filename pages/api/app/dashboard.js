@@ -18,7 +18,7 @@ function expandIdsForIn(ids) {
   }
   return [...out]
 }
-const { computeRankCycleProgress } = require("../../../lib/rankCycles")
+const { computeVisibleRankProgress } = require("../../../lib/rankCycles")
 const { normalizePlanList } = require("../../../lib/planNames")
 const { getAffiliationPlans } = require("../../../lib/planCatalog")
 const { getActivePeriodReferenceDate } = require("../../../lib/activePeriod")
@@ -158,20 +158,25 @@ export default async (req, res) => {
     referenceDate
   )
 
-  // Use the user's DB state for cycles
-  const currentMonthProducts = (monthlyActivity.personalProductCount || 0) + (monthlyActivity.groupProductCount || 0)
+  // Use the user's DB state for cycles, applying inactivity so preview matches el cierre
+  const currentMonthProducts = monthlyActivity.groupProductCount || 0
   const currentDirects = directs.length || 0
 
   const provisionalRank = user.rank || 'ACTIVO'
   const nextRankName = user.qualifying_rank || 'plata'
+  const maxRank = user.max_rank || user.rank || 'none'
 
-  const rankCycle = computeRankCycleProgress(
-    nextRankName,
-    Number(user.completed_cycles) || 0,
+  const visibleProgress = computeVisibleRankProgress({
+    monthlyActive: !!monthlyActivity.monthlyActive,
+    maxRank,
+    qualifyingRank: nextRankName,
+    completedCycles: Number(user.completed_cycles) || 0,
+    cycleOverflow: Number(user.cycle_overflow) || 0,
     currentMonthProducts,
-    Number(user.cycle_overflow) || 0,
-    currentDirects
-  )
+    personalDirects: currentDirects,
+  })
+
+  const rankCycle = visibleProgress.rankCycle
   
   let nextRankPercentage = rankCycle.overallPct
   if (nextRankName === "active") {
@@ -223,5 +228,7 @@ export default async (req, res) => {
     affiliatedThisMonth: monthlyActivity.affiliatedThisMonth,
     minActivePurchaseBs: monthlyActivity.minActivePurchaseBs,
     rankCycle,
+    rankQualification: visibleProgress.qualification,
+    cycle1Locked: visibleProgress.cycle1Locked,
   }))
 }
