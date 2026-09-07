@@ -282,7 +282,7 @@ func main() {
 				Type:   "in",
 				Value:  res.GeneratedBonus,
 				Name:   "rank bonus",
-				Desc:   "Bono de rango completado: " + res.QualifyingRank,
+				Desc:   "Bono de recalificación completado: " + res.QualifyingRank,
 				Date:   time.Now(),
 			})
 		}
