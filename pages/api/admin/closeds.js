@@ -375,20 +375,7 @@ export default async (req, res) => {
         const usersList = await User.find({})
         const treeList = await Tree.find({})
 
-        const { enrichPreviewTreeWithRankBonuses } = require("../../../lib/applyRankBonusesOnClose")
-        const closedsList = await Closed.find({})
-        let rankPayDocs = []
-        try {
-          rankPayDocs = await RankBonusPayment.find({})
-        } catch (e) {
-          rankPayDocs = []
-        }
-        const treeWithRankBonuses = enrichPreviewTreeWithRankBonuses(
-          result.tree,
-          closedsList,
-          rankPayDocs,
-          usersList
-        )
+        const treeWithRankBonuses = result.tree
 
         return res.json(success({
           tree: treeWithRankBonuses,
@@ -418,17 +405,7 @@ export default async (req, res) => {
           (periodResult.closedPeriod && periodResult.closedPeriod.key) ||
           buildPeriodKey(referenceDate.getFullYear(), referenceDate.getMonth() + 1)
 
-        const { applyRankBonusesAfterGoClose } = require("../../../lib/applyRankBonusesOnClose")
-        let rankBonuses = null
-        try {
-          rankBonuses = await applyRankBonusesAfterGoClose({
-            periodKey,
-            rand: () => rand(),
-          })
-        } catch (rankErr) {
-          console.error("❌ Bonos por rango post-cierre:", rankErr)
-          rankBonuses = { error: String(rankErr.message || rankErr) }
-        }
+
 
         return res.json(success({
           message: 'Cierre completado con éxito',
@@ -442,7 +419,6 @@ export default async (req, res) => {
             bonus_transactions: summary.bonus_transactions,
           },
           period: periodResult,
-          rank_bonuses: rankBonuses,
         }))
 
       } catch (error) {
