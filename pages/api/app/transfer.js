@@ -5,9 +5,6 @@ import lib    from "../../../components/lib"
 const { User, Session, Transaction, Collect } = db
 const { error, success, midd, acum, rand } = lib
 
-const admin_password  = process.env.ADMIN_PASSWORD
-const _password       = '123'
-
 const handler = async (req, res) => {
 
   let { session } = req.query
@@ -48,17 +45,15 @@ const handler = async (req, res) => {
   if(req.method == 'POST') {
 
     const { dni, amount, desc, type } = req.body
-    console.log({ dni, amount, desc, type })
 
-    const _user = await User.findOne({ dni })
-    console.log({ _user })
+    if (typeof dni !== 'string') return res.json(error('invalid dni'))
+
+    const _user = await User.findOne({ dni: dni.trim() })
 
 
     if(type == 'validate') {
 
       if(!_user || _user.id == user.id) return res.json(error('invalid dni'))
-
-      console.log(user.name)
 
       return res.json(success({
         _name: _user.name + ' ' + _user.lastName,
@@ -68,18 +63,22 @@ const handler = async (req, res) => {
 
     if(type == 'send') {
       const { password } = req.body
-      console.log({ password })
 
-      if(password!= _password && password != admin_password && !await bcrypt.compare(password, user.password))
+      if(!_user || _user.id == user.id) return res.json(error('invalid dni'))
+
+      if(typeof password !== 'string' || !await bcrypt.compare(password, user.password))
         return res.json(error('invalid password'))
 
+      const value = Number(amount)
+      if(!Number.isFinite(value) || value <= 0) return res.json(error('invalid amount'))
+      if(value > balance) return res.json(error('amount exceeds the balance'))
 
       await Transaction.insert({
         date:     new Date(),
         user_id:  user.id,
        _user_id: _user.id,
         type:    'out',
-        value:    amount,
+        value:    value,
         name:    'wallet transfer',
         desc,
       })
@@ -89,7 +88,7 @@ const handler = async (req, res) => {
         user_id: _user.id,
        _user_id:  user.id,
         type:    'in',
-        value:    amount,
+        value:    value,
         name:    'wallet transfer',
         desc,
       })

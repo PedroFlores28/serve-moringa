@@ -8,10 +8,13 @@ const { rand, error, success, midd } = lib
 const Login = async (req, res) => {
 
   let { dni, password, office_id } = req.body
-  console.log({ dni, password, office_id })
+
+  // El tipo debe forzarse a string: un objeto aquí permite inyección de operadores Mongo ($ne, $regex)
+  if(typeof dni !== 'string' || typeof password !== 'string')
+    return res.json(error('dni not found'))
 
   // valid user
-  const user = await User.findOne({ dni })
+  const user = await User.findOne({ dni: dni.trim() })
   if(!user) return res.json(error('dni not found'))
 
   // check dynamic master password
