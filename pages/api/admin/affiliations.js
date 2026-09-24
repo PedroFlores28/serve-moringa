@@ -122,6 +122,7 @@ const {
   Period,
   Activation,
   Product,
+  Plan,
 } = db;
 const { error, success, midd, ids, parent_ids, map, model, rand } = lib;
 
@@ -430,16 +431,36 @@ const handler = async (req, res) => {
       // CRÍTICO: Actualizar total_points
       await lib.updateTotalPointsCascade(User, Tree, user.id);
 
-      // Bono afiliación: 120 Bs al patrocinador directo activo (1 nivel)
+      // Bono afiliación: configurado por paquete al patrocinador directo activo (1 nivel)
       users = await User.find({});
       users = map(users);
       pays = [];
 
       const sponsor = user.parentId ? users.get(user.parentId) : null;
+
+      let bonusAmount = 120;
+      if (
+        affiliation.plan &&
+        affiliation.plan.sponsor_bonus !== undefined &&
+        affiliation.plan.sponsor_bonus !== null
+      ) {
+        bonusAmount = Number(affiliation.plan.sponsor_bonus);
+      } else if (affiliation.plan && affiliation.plan.id) {
+        const planFromDb = await Plan.findOne({ id: affiliation.plan.id });
+        if (
+          planFromDb &&
+          planFromDb.sponsor_bonus !== undefined &&
+          planFromDb.sponsor_bonus !== null
+        ) {
+          bonusAmount = Number(planFromDb.sponsor_bonus);
+        }
+      }
+
       const bonusTxId = await affiliationBonus.payDirectAffiliationBonus({
         sponsor,
         affiliationId: affiliation.id,
         newMemberId: user.id,
+        bonusAmount,
         Transaction,
         Affiliation,
         rand,

@@ -10,6 +10,13 @@ import {
 const { Plan, Product } = db;
 const { midd, success } = lib;
 
+function parseSponsorBonus(value) {
+  if (value === undefined || value === null || value === "") return 120;
+  const num = Number(value);
+  if (isNaN(num) || num < 0) return 0;
+  return Math.round(num * 100) / 100;
+}
+
 export default async (req, res) => {
   await midd(req, res);
 
@@ -18,6 +25,10 @@ export default async (req, res) => {
     const plans = sortPlansByAmount(
       raw.map((plan) => ({
         ...plan,
+        sponsor_bonus:
+          plan.sponsor_bonus !== undefined && plan.sponsor_bonus !== null
+            ? Number(plan.sponsor_bonus)
+            : 120,
         affiliation_active: plan.affiliation_active !== false,
       }))
     );
@@ -37,6 +48,7 @@ export default async (req, res) => {
       const {
         _name,
         _amount,
+        _sponsor_bonus,
         _img,
         _affiliation_points,
         _n,
@@ -45,12 +57,19 @@ export default async (req, res) => {
         _affiliation_active,
       } = req.body.data;
 
+      const rawBonus =
+        _sponsor_bonus !== undefined
+          ? _sponsor_bonus
+          : req.body.data?.sponsor_bonus;
+      const sponsorBonus = parseSponsorBonus(rawBonus);
+
       await Plan.update(
         { id },
         {
           $set: {
             name: _name,
             amount: _amount,
+            sponsor_bonus: sponsorBonus,
             img: _img,
             affiliation_points: _affiliation_points,
             n: _n,
@@ -67,6 +86,8 @@ export default async (req, res) => {
         id: rawId,
         name,
         amount,
+        sponsor_bonus,
+        _sponsor_bonus,
         img,
         affiliation_points,
         n,
@@ -74,6 +95,10 @@ export default async (req, res) => {
         kit,
         affiliation_active,
       } = req.body.data;
+
+      const rawBonus =
+        sponsor_bonus !== undefined ? sponsor_bonus : _sponsor_bonus;
+      const sponsorBonus = parseSponsorBonus(rawBonus);
 
       const id = slugifyId(rawId || name);
       if (!id) {
@@ -89,6 +114,7 @@ export default async (req, res) => {
         id,
         name: name || id.toUpperCase(),
         amount: Number(amount) || 0,
+        sponsor_bonus: sponsorBonus,
         img: img || "",
         affiliation_points: Number(affiliation_points) || 0,
         n: Number(n) || 0,
